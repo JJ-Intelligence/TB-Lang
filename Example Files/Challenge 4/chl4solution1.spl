@@ -1,0 +1,7 @@
+-- Challenge 4, solution 1
+func solve ([]) = return ([]);
+func solve (x:y:z:as) = return (z : 2*y : 3*a-1 : solve (as));
+
+as:[] = input;
+
+out (solve (as));

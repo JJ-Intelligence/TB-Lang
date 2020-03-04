@@ -1,0 +1,10 @@
+-- Challenge 5, solution 1
+func solve ([], acc) = return ([]);
+func solve (a:as, acc) = {
+	x = a + acc;
+	return (x : solve (as, x));
+}
+
+as:[] = input;
+
+out (solve (as));
