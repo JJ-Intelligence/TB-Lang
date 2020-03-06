@@ -23,7 +23,7 @@ tokens :-
     \{                                  { \p s -> TokenOpenCurly p }
     \}                                  { \p s -> TokenCloseCurly p }
 
-    '=='                                { \p s -> TokenDoubleEquals p }
+    \=\=                                 { \p s -> TokenDoubleEquals p }
     \=                                  { \p s -> TokenEquals p }
 
     $digit+                             { \p s -> TokenInt (read s) p }
