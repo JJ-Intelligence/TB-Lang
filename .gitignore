@@ -1,0 +1,7 @@
+
+*.hi
+*.o
+Lexer.hs
+Lexer.o
+Main.exe
+Main.hi 
