@@ -33,7 +33,9 @@ tokens :-
     [$alpha \_] [$alpha $digit \_]*     { \p s -> TokenVar s p }
 
  
-{ 
+{
+
+-- Lexeme Tokens.
 data Token =  TokenIf               {pos :: AlexPosn}
             | TokenElif             {pos :: AlexPosn}
             | TokenElse             {pos :: AlexPosn}
@@ -51,7 +53,27 @@ data Token =  TokenIf               {pos :: AlexPosn}
             | TokenBool             {bool :: Bool, pos :: AlexPosn}
 
             | TokenVar              {name :: String, pos :: AlexPosn} 
-    deriving (Eq,Show) 
+            deriving (Eq) 
+
+-- Token instance of Show, used for error messages.
+instance Show Token where
+    show (TokenIf _) = "if"
+    show (TokenElif _) = "elif"
+    show (TokenElse _) = "else"
+
+    show (TokenSeq _) = ";"
+    show (TokenOpenParen _) = "("
+    show (TokenCloseParen _) = ")"
+    show (TokenOpenCurly _) = "{"
+    show (TokenCloseCurly _) = "}"
+
+    show (TokenEquals _) = "="
+    show (TokenDoubleEquals _) = "=="
+
+    show (TokenInt n _) = show n
+    show (TokenBool b _) = show b
+
+    show (TokenVar s _) = s
 
 tokenPosn :: Token -> (Int, Int)
 tokenPosn tok = (l, c)

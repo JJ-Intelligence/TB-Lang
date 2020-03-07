@@ -400,7 +400,7 @@ happySeq = happyDontSeq
 
 parseError :: [Token] -> a
 parseError [] = error "ERROR: End of Tokens parse error"
-parseError (x:xs) = error ("ERROR: Parse error at line " ++ (show l) ++ ", column " ++ (show c) ++ ", parsing Token "++ (show x) ++".")
+parseError (x:xs) = error ("ERROR: Parse error at line " ++ (show l) ++ ", column " ++ (show c) ++ ", parsing \'"++ (show x) ++"\'.")
         where (l,c) = tokenPosn x
 
 data ExprElif = Elif Expr Expr (Maybe ExprElif)
