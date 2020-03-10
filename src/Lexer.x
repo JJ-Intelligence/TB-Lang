@@ -57,23 +57,23 @@ data Token =  TokenIf               {pos :: AlexPosn}
 
 -- Token instance of Show, used for error messages.
 instance Show Token where
-    show (TokenIf _) = "if"
-    show (TokenElif _) = "elif"
-    show (TokenElse _) = "else"
+    show (TokenIf _) = "if "
+    show (TokenElif _) = "elif "
+    show (TokenElse _) = "else "
 
-    show (TokenSeq _) = ";"
-    show (TokenOpenParen _) = "("
-    show (TokenCloseParen _) = ")"
-    show (TokenOpenCurly _) = "{"
-    show (TokenCloseCurly _) = "}"
+    show (TokenSeq _) = "; "
+    show (TokenOpenParen _) = "( "
+    show (TokenCloseParen _) = ") "
+    show (TokenOpenCurly _) = "{ "
+    show (TokenCloseCurly _) = "} "
 
-    show (TokenEquals _) = "="
-    show (TokenDoubleEquals _) = "=="
+    show (TokenEquals _) = "= "
+    show (TokenDoubleEquals _) = "== "
 
-    show (TokenInt n _) = show n
-    show (TokenBool b _) = show b
+    show (TokenInt n _) = (show n) ++ " "
+    show (TokenBool b _) = (show b) ++ " "
 
-    show (TokenVar s _) = s
+    show (TokenVar s _) = s ++ " "
 
 tokenPosn :: Token -> (Int, Int)
 tokenPosn tok = (l, c)
