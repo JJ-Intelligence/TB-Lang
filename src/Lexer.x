@@ -75,8 +75,8 @@ instance Show Token where
     show (TokenOpenCurly _) = "{ "
     show (TokenCloseCurly _) = "} "
     show (TokenOpenSquare _) = "[ "
-    show (TokenOpenSquare _) = "] "
-    show (TokenComma) = ", "
+    show (TokenCloseSquare _) = "] "
+    show (TokenComma _) = ", "
 
     show (TokenEquals _) = "= "
     show (TokenDoubleEquals _) = "== "

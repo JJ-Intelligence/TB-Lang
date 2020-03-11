@@ -59,11 +59,11 @@ O : E '==' E                        { Op (CompOp Equality $1 $3) }
   | E ':' E                         { Op (Cons $1 $3) }
 
 -- List operations.
-C : '[' C2 ']'                      { Op ($2) }
+C : '[' C2 ']'                      { $2 }
   | '[' ']'                         { Literal Empty }
 
-C2 : E ',' C2                       { Cons $1 $3 }
-   | E                              { Cons $1 (Literal Empty) }
+C2 : E ',' C2                       { Op (Cons $1 $3) }
+   | E                              { Op (Cons $1 (Literal Empty)) }
 
 -- Literals.
 L : int                             { Literal (EInt $1) }

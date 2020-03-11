@@ -4,12 +4,12 @@ import qualified Data.Map.Strict as Map
 
 -- Environment - A mapping of functions and variables to Closures (which maps an Expression to an Environment).
 type Address = Int
-data Environment = [ (String, Address) ]
+type Environment = [ (String, Address) ]
 type Store = Map Address ExprType
 data ExprType = TInt Int
               | TBool Bool
-              --| TFunc [ (Expr, Expr) ]
               deriving (Show)
+              -- | TFunc [ (Expr, Expr) ]
 
 -- Kontinuation - A stack containing Frames showing what to do.
 type Kon = [ Frame ]
