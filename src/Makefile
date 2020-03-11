@@ -14,7 +14,7 @@ DEPEND += Lexer.hs Parser.hs
 all: $(DEPEND) Main
 
 # Build an executable for Toy interpreter
-Toy: $(DEPEND) Main.hs
+Main: $(DEPEND) Main.hs
 	ghc Main.hs
 
 # Build an executable for interactive mode
@@ -28,10 +28,10 @@ Parser.hs : Parser.y
 	@chmod -w Parser.hs
 
 # Generate ML files from a lexer definition file
-ToyTokens.hs : Parser.x
-	@rm -f Parser.hs
-	alex Parser.x
-	@chmod -w Parser.hs
+Lexer.hs : Lexer.x
+	@rm -f Lexer.hs
+	alex Lexer.x
+	@chmod -w Lexer.hs
 
 # Clean up the directory
 clean::
