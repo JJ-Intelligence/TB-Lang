@@ -30,6 +30,7 @@ import Lexer
     var    { TokenVar $$ _ }
 
 %right ';'
+%left ':'
 %left '='
 %left '=='
 %%
@@ -42,6 +43,8 @@ E : E ';' E                         { Seq $1 $3 }
   | var                             { Var $1 }
   | B                               { $1 }
   | O                               { $1 }
+  | C                               { $1 }
+  | L                               { $1 }
 
 -- Elif part of an If statement.
 EElif : elif '(' E ')' B EElif      { Elif $3 $5 (Just $6) }
@@ -51,17 +54,13 @@ EElif : elif '(' E ')' B EElif      { Elif $3 $5 (Just $6) }
 -- Function block.
 B : '{' E '}'                       { $2 }
 
--- Operations.
+-- Binary operations.
 O : E '==' E                        { Op (CompOp Equality $1 $3) }
-  | C                               { $1 }
+  | E ':' E                         { Op (Cons $1 $3) }
 
--- List cons operation.
-C : E ':' C                         { Op (Cons $1 $3) }
+-- List operations.
+C : '[' C2 ']'                      { Op ($2) }
   | '[' ']'                         { Literal Empty }
-
--- List.
-C1 : '[' C2 ']'                     { Op $ $2 }
-   | '[' ']'                        { Literal Empty }
 
 C2 : E ',' C2                       { Cons $1 $3 }
    | E                              { Cons $1 (Literal Empty) }
