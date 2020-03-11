@@ -79,7 +79,7 @@ step (Value e1, env, store, (HBinOp (BinConsOp e2 env')):kon) = step (e2, env', 
 step (Value (VList []), env, store, (BinOpH (BinConsOp (Value e1) env')):kon) = step (Value $ VList [e1], env', store, kon)
 
 step (Value (VList (x:xs)), env, store, (BinOpH (BinConsOp (Value e1) env')):kon)
-    | checkType e1 x = step (Value (VList (e1:x:xs)), env', store, kon)
+    | checkTypeEq e1 x = step (Value (VList (e1:x:xs)), env', store, kon)
     | otherwise = error "ERRORRRRR type issues plz fix."
 
 -- if-elif-else statement.
@@ -97,22 +97,21 @@ step s@(_, _, _, [Done]) = s
 -- No defined step for the current State.
 step (exp, env, store, kon) = error $ "ERROR evaluating expression " ++ (show exp) ++ ", no CESK step defined."
 
-checkType :: ExprValue -> ExprValue -> Bool
-checkType (VInt _) (VInt _) = True
-checkType (VBool _) (VBool _) = True
-checkType VNone VNone = True
-checkType (VList _) (VList _) = True
-checkType _ _ = False
-
--- checkType (VList xs) (VList []) = True
-
--- checkType (VList []) (VList ((VList _):ys)) = True
-
--- checkType (VList [x]) (VList ((VList y):_)) = checkType x (VList y) 
-
--- checkType (VList (xs:_)) (VList (ys:_)) = checkType xs ys
-
-
+-- Checks the type of two ExprValue's, returning True if they are equal.
+checkTypeEq :: ExprValue -> ExprValue -> Bool
+checkTypeEq (VInt _) (VInt _) = True
+checkTypeEq (VBool _) (VBool _) = True
+checkTypeEq VNone VNone = True
+checkTypeEq (VList []) (VList []) = True
+checkTypeEq (VList []) (VList ((VList xs):_))
+    | length xs == 0 = True
+    | otherwise = helper (head xs)
+    where helper (VInt _) = True
+          helper (VBool _) = True
+          helper (VNone) = True
+          helper _ = False
+checkTypeEq (VList (xs:_)) (VList (ys:_)) = checkTypeEq xs ys
+checkTypeEq _ _ = False
 
 -- Binds a String (variable name) to an expression, updating the environment and store and returning them.
 updateEnvStore :: Environment -> Store -> String -> Expr -> (Environment, Store)
