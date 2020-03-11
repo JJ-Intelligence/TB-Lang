@@ -23,12 +23,14 @@ tokens :-
     \{                                  { \p s -> TokenOpenCurly p }
     \}                                  { \p s -> TokenCloseCurly p }
 
-    \=\=                                 { \p s -> TokenDoubleEquals p }
+    \=\=                                { \p s -> TokenDoubleEquals p }
     \=                                  { \p s -> TokenEquals p }
+    \:                                  { \p _ -> TokenCons p }
 
     $digit+                             { \p s -> TokenInt (read s) p }
     True                                { \p s -> TokenBool True p }
     False                               { \p s -> TokenBool False p }
+    \[\]                                { \p _ -> TokenEmptyList p }
 
     [$alpha \_] [$alpha $digit \_]*     { \p s -> TokenVar s p }
 
@@ -48,9 +50,11 @@ data Token =  TokenIf               {pos :: AlexPosn}
 
             | TokenEquals           {pos :: AlexPosn}
             | TokenDoubleEquals     {pos :: AlexPosn}
+            | TokenCons             {pos :: AlexPosn}
 
             | TokenInt              {int :: Int, pos :: AlexPosn}
             | TokenBool             {bool :: Bool, pos :: AlexPosn}
+            | TokenEmptyList        {pos :: AlexPosn}
 
             | TokenVar              {name :: String, pos :: AlexPosn} 
             deriving (Eq) 
@@ -69,9 +73,11 @@ instance Show Token where
 
     show (TokenEquals _) = "= "
     show (TokenDoubleEquals _) = "== "
+    show (TokenCons _) = ": "
 
     show (TokenInt n _) = (show n) ++ " "
     show (TokenBool b _) = (show b) ++ " "
+    show (TokenEmptyList _) = "[] "
 
     show (TokenVar s _) = s ++ " "
 
