@@ -22,6 +22,9 @@ tokens :-
     \)                                  { \p s -> TokenCloseParen p }
     \{                                  { \p s -> TokenOpenCurly p }
     \}                                  { \p s -> TokenCloseCurly p }
+    \[                                  { \p _ -> TokenOpenSquare p }
+    \]                                  { \p _ -> TokenCloseSquare p }
+    \,                                  { \p _ -> TokenComma p }
 
     \=\=                                { \p s -> TokenDoubleEquals p }
     \=                                  { \p s -> TokenEquals p }
@@ -30,7 +33,6 @@ tokens :-
     $digit+                             { \p s -> TokenInt (read s) p }
     True                                { \p s -> TokenBool True p }
     False                               { \p s -> TokenBool False p }
-    \[\]                                { \p _ -> TokenEmptyList p }
 
     [$alpha \_] [$alpha $digit \_]*     { \p s -> TokenVar s p }
 
@@ -47,6 +49,9 @@ data Token =  TokenIf               {pos :: AlexPosn}
             | TokenCloseParen       {pos :: AlexPosn}
             | TokenOpenCurly        {pos :: AlexPosn}
             | TokenCloseCurly       {pos :: AlexPosn}
+            | TokenOpenSquare       {pos :: AlexPosn}
+            | TokenCloseSquare      {pos :: AlexPosn}
+            | TokenComma            {pos :: AlexPosn}
 
             | TokenEquals           {pos :: AlexPosn}
             | TokenDoubleEquals     {pos :: AlexPosn}
@@ -54,7 +59,6 @@ data Token =  TokenIf               {pos :: AlexPosn}
 
             | TokenInt              {int :: Int, pos :: AlexPosn}
             | TokenBool             {bool :: Bool, pos :: AlexPosn}
-            | TokenEmptyList        {pos :: AlexPosn}
 
             | TokenVar              {name :: String, pos :: AlexPosn} 
             deriving (Eq) 
@@ -70,6 +74,9 @@ instance Show Token where
     show (TokenCloseParen _) = ") "
     show (TokenOpenCurly _) = "{ "
     show (TokenCloseCurly _) = "} "
+    show (TokenOpenSquare _) = "[ "
+    show (TokenOpenSquare _) = "] "
+    show (TokenComma) = ", "
 
     show (TokenEquals _) = "= "
     show (TokenDoubleEquals _) = "== "
@@ -77,7 +84,6 @@ instance Show Token where
 
     show (TokenInt n _) = (show n) ++ " "
     show (TokenBool b _) = (show b) ++ " "
-    show (TokenEmptyList _) = "[] "
 
     show (TokenVar s _) = s ++ " "
 

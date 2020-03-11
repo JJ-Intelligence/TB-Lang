@@ -16,6 +16,9 @@ import Lexer
     ')'    { TokenCloseParen _ }
     '{'    { TokenOpenCurly _ }
     '}'    { TokenCloseCurly _ }
+    '['    { TokenOpenSquare _ }
+    ']'    { TokenOpenSquare _ }
+    ','    { TokenComma _ }
 
     '=='   { TokenDoubleEquals _ }
     '='    { TokenEquals _ }
@@ -23,7 +26,6 @@ import Lexer
 
     int    { TokenInt $$ _ }
     bool   { TokenBool $$ _ }
-    '[]'   { TokenEmptyList _ }
 
     var    { TokenVar $$ _ }
 
@@ -55,7 +57,14 @@ O : E '==' E                        { Op (CompOp Equality $1 $3) }
 
 -- List cons operation.
 C : E ':' C                         { Op (Cons $1 $3) }
-  | '[]'                            { Literal Empty }
+  | '[' ']'                         { Literal Empty }
+
+-- List.
+C1 : '[' C2 ']'                     { Op $ $2 }
+   | '[' ']'                        { Literal Empty }
+
+C2 : E ',' C2                       { Cons $1 $3 }
+   | E                              { Cons $1 (Literal Empty) }
 
 -- Literals.
 L : int                             { Literal (EInt $1) }
@@ -94,6 +103,7 @@ data Expr = If Expr Expr (Maybe ExprElif)
           | DefVar String Expr
           | Var String
           | Seq Expr Expr
+          | End
           deriving (Show)
 
 }
