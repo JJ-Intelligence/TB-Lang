@@ -17,7 +17,7 @@ import Lexer
     '{'    { TokenOpenCurly _ }
     '}'    { TokenCloseCurly _ }
     '['    { TokenOpenSquare _ }
-    ']'    { TokenOpenSquare _ }
+    ']'    { TokenCloseSquare _ }
     ','    { TokenComma _ }
 
     '=='   { TokenDoubleEquals _ }
@@ -30,8 +30,8 @@ import Lexer
     var    { TokenVar $$ _ }
 
 %right ';'
-%left ':'
 %left '='
+%right ':'
 %left '=='
 %%
 
@@ -87,6 +87,12 @@ data ExprLiteral = EInt Int
                  | Empty
                  deriving (Eq, Show)
 
+data ExprValue = VInt Int
+               | VBool Bool
+               | VList [ExprValue]
+               | VNone
+               deriving (Eq, Show)
+
 -- Binary Operation.
 data BinOp = CompOp ExprComp Expr Expr
            | Cons Expr Expr
@@ -98,11 +104,11 @@ data ExprComp = Equality
 
 data Expr = If Expr Expr (Maybe ExprElif)
           | Literal ExprLiteral
+          | Value ExprValue
           | Op BinOp
           | DefVar String Expr
           | Var String
           | Seq Expr Expr
-          | End
           deriving (Eq, Show)
 
 }
