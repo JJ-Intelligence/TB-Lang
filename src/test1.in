@@ -1,11 +1,11 @@
-y = 2;
+y = 2 == 2;
 
-if (y == 0) {
+if (y == True) {
     x = 4;
 } elif (y == 1) {
     x = 6;
 } elif (y == 2) {
     x = 9;
 } else {
-    x = 7;
+    y = 3
 }

@@ -79,22 +79,22 @@ parseError (x:xs) = error ("ERROR: Parse error at line " ++ (show l) ++ ", colum
 -- Elif part of an If statement.
 data ExprElif = Elif Expr Expr (Maybe ExprElif)
               | Else Expr
-              deriving (Show)
+              deriving (Eq, Show)
 
 -- Literals.
 data ExprLiteral = EInt Int
                  | EBool Bool
                  | Empty
-                 deriving (Show)
+                 deriving (Eq, Show)
 
 -- Binary Operation.
 data BinOp = CompOp ExprComp Expr Expr
            | Cons Expr Expr
-           deriving (Show)
+           deriving (Eq, Show)
 
 -- Comparison operations.
 data ExprComp = Equality
-              deriving (Show)
+              deriving (Eq, Show)
 
 data Expr = If Expr Expr (Maybe ExprElif)
           | Literal ExprLiteral
@@ -103,6 +103,6 @@ data Expr = If Expr Expr (Maybe ExprElif)
           | Var String
           | Seq Expr Expr
           | End
-          deriving (Show)
+          deriving (Eq, Show)
 
 }

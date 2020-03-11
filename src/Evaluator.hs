@@ -1,32 +1,29 @@
 module Evaluator where
 import Parser
 import qualified Data.Map.Strict as Map
+import Data.Maybe
 
 -- Environment - A mapping of functions and variables to Closures (which maps an Expression to an Environment).
 type Address = Int
-type Environment = [ (String, Address) ]
-type Store = Map Address ExprType
-data ExprType = TInt Int
-              | TBool Bool
-              deriving (Show)
-              -- | TFunc [ (Expr, Expr) ]
+type Environment = Map.Map String Address
+type Store = Map.Map Address Expr
 
 -- Kontinuation - A stack containing Frames showing what to do.
 type Kon = [ Frame ]
 
 -- Frame - Data structures to be put onto the Kontinuation.
-data BinOpFrame = BinCompOp ExprComp Expr Env -- Frame for a binary comparison operation - e.g. [-] == e2
+data BinOpFrame = BinCompOp ExprComp Expr -- Frame for a binary comparison operation - e.g. [-] == e2
                 | BinSeqOp Expr -- Frame for a binary sequence operation - e.g. [-] ; e2
                 deriving (Show)
 
-data TerOpFrame = TerIfOp Expr (Maybe ExprElif) Env -- Frame for a ternary if statement operation - e.g. if [-] then e1 e2 (e2 is the else/elif)
+data TerOpFrame = TerIfOp Expr (Maybe ExprElif) Environment -- Frame for a ternary if statement operation - e.g. if [-] then e1 e2 (e2 is the else/elif)
                 deriving (Show)
 
 data Frame = HBinOp BinOpFrame
-           | BinOpH BinOpFrame    
+           | BinOpH BinOpFrame
            | HTerOp TerOpFrame
            | TerOpH TerOpFrame
-           | DefVar String Env
+           | DefVarFrame String Environment
            | Done 
            deriving (Show)
 
@@ -36,49 +33,81 @@ type State = (Expr, Environment, Store, Kon)
 
 -- Evaluation function to take an Expression (Control) and run it on the finite state machine.
 eval :: Expr -> State
-eval e = step (e, [], empty [Done])
+eval e = step (e, Map.empty, Map.empty, [Done])
 
 
 -- Step function to move from one State to another.
 step :: State -> State
 
-step (Seq e1 e2, env, store, kon) = step (e1, env, store, (HBinOp $ BinSeqOp e2):kon) -- Not sure If you should store the env for e2 - as it should really get the finished env after e1's been evaluated.
+step (Seq e1 e2, env, store, kon) = step (e1, env, store, (HBinOp $ BinSeqOp e2):kon)
+step (End, env, store, (HBinOp (BinSeqOp e2)):kon) = step (e2, env, store, kon)
 
 -- Defining a new Var.
 -- Looks for the variable in the Env, and replaces it in the Store if it exists, else it creates it.
-step (DefVar s e1, env, store, kon) = step (e1, env, store, (DefVar s env):kon)
+step (DefVar s e1, env, store, kon) = step (e1, env, store, (DefVarFrame s env):kon)
 
-step (Literal $ EInt n, env, store, (DefVar s env'):kon) = step (End, env'', store', kon)
-    where (env'', store') = updatedEnvStore env' store s (TInt n)
+step (Literal (EInt n), env, store, (DefVarFrame s env'):kon) = step (End, env'', store', kon)
+    where (env'', store') = updateEnvStore env' store s (Literal $ EInt n)
 
-step (Literal $ EBool b, env, store, (DefVar s env'):kon) = step (End, env'', store', kon)
-    where (env'', store') = updatedEnvStore env' store s (TBool b)
+step (Literal (EBool b), env, store, (DefVarFrame s env'):kon) = step (End, env'', store', kon)
+    where (env'', store') = updateEnvStore env' store s (Literal $ EBool b)
 
-step ()
+-- Equality binary operation.
+step (Op (CompOp Equality e1 e2), env, store, kon) = step (e1, env, store, (HBinOp $ BinCompOp Equality e2):kon)
+
+step (Literal (EBool b), env, store, (HBinOp (BinCompOp Equality e2)):kon) = step (e2, env, store, (BinOpH $ BinCompOp Equality $ Literal $ EBool b):kon)
+step (Literal (EInt n), env, store, (HBinOp (BinCompOp Equality e2)):kon) = step (e2, env, store, (BinOpH $ BinCompOp Equality $ Literal $ EInt n):kon)
+
+step (Literal (EBool b'), env, store, (BinOpH (BinCompOp Equality (Literal (EBool b)))):kon) = step (Literal $ EBool $ b == b', env, store, kon)
+step (Literal (EInt n'), env, store, (BinOpH (BinCompOp Equality (Literal (EInt n)))):kon) = step (Literal $ EBool $ n == n', env, store, kon)
+
+step (Var s, env, store, kon) 
+    | addr == Nothing = error $ "Variable " ++ s ++ " is not in the Environment."
+    | val == Nothing = error $ "Variable " ++ s ++ " is not in the Store."
+    | otherwise = step (fromJust val, env, store, kon)
+    where addr = Map.lookup s env
+          val = Map.lookup (fromJust addr) store
+
+-- If statement.
+step (If c e1 e2, env, store, kon) = step (c, env, store, (HTerOp $ TerIfOp e1 e2 env):kon)
+step (Literal (EBool b), env, store, (HTerOp (TerIfOp e1 e2 env')):kon)
+    | b = step (e1, env', store, kon)
+    | otherwise = step $ helper e2
+    where helper Nothing = (End, env', store, kon)
+          helper (Just (Else e)) = (e, env', store, kon)
+          helper (Just (Elif c' e1' e2')) = (If c' e1' e2', env', store, kon)
 
 -- End of evaluation.
-step s@(_, _, [Done]) = s
+step s@(_, _, _, [Done]) = s
 
 -- No defined step for the current State.
-step (exp, env, kon) = error $ "ERROR evaluating expression " ++ (show exp) ++ ", no CESK step defined."
+step (exp, env, store, kon) = error $ "ERROR evaluating expression " ++ (show exp) ++ ", no CESK step defined."
 
 
 -- Binds a String (variable name) to an expression, updating the environment and store and returning them.
-updatedEnvStore :: Environment -> Store -> String -> ExprType -> (Environment, Store)
-updatedEnvStore env store s e1 = (env', updateStore store addr (Just $ e1))
-    where (env', addr) = case lookup s env of
+updateEnvStore :: Environment -> Store -> String -> Expr -> (Environment, Store)
+updateEnvStore env store s e1 = (env', updateStore store addr e1)
+    where (env', addr) = case Map.lookup s env of
                                 Just (a) -> (env, a)
-                                Nothing -> addToEnv env s
+                                Nothing -> addToEnv env store s
 
 -- Adds a new String to the Environment, and returns a tuple of the new Environment and the created Address.
-addToEnv :: Environment -> String -> (Environment, Address)
-addToEnv [] x = ([(x,0)], 0)
-addToEnv ((s,a):env) x = ((x,a+1) : (s,a) : env, a+1)
+addToEnv :: Environment -> Store -> String -> (Environment, Address)
+addToEnv env store s 
+    | Map.lookup s env == Nothing = (Map.insert s addr env, addr)
+    | otherwise = (env, addr)
+    where addr = case Map.lookup s env of 
+                        Just (a) -> a
+                        Nothing -> (helper store 0)
+
+          helper store c
+                | Map.lookup c store == Nothing = c
+                | otherwise = helper store (c+1)
 
 -- Updates an Address mapping in the store.
 -- If the inputted Address is not in the store, then it will be inserted.
 updateStore :: Store -> Address -> Expr -> Store
 updateStore store a e1
-    | item == Nothing = insert a e1 store
-    | otherwise = update (\x -> Just e1) a store
+    | item == Nothing = Map.insert a e1 store
+    | otherwise = Map.update (\x -> Just e1) a store
     where item = Map.lookup a store

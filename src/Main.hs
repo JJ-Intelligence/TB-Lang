@@ -9,6 +9,5 @@ main = do args <- getArgs
           case args of
                 [file] -> do f <- readFile file
                              let xs = alexScanTokens f
-                             print xs
-                             print $ parse xs
+                             print $ eval $ parse xs
                 _ -> print "Wrong number of arguments"
