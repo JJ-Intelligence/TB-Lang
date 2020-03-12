@@ -31,6 +31,7 @@ data Frame = HBinOp BinOpFrame
 -- State - The current state/configuration of the CESK machine.
 type State = (Expr, Environment, Store, Kon)
 
+data Type = TInt | TBool | TEmpty | TList Type | TConflict deriving (Eq, Show)
 
 -- Evaluation function to take an Expression (Control) and run it on the finite state machine.
 eval :: Expr -> State
@@ -78,9 +79,9 @@ step (Value e1, env, store, (HBinOp (BinConsOp e2 env')):kon) = step (e2, env', 
 
 step (Value (VList []), env, store, (BinOpH (BinConsOp (Value e1) env')):kon) = step (Value $ VList [e1], env', store, kon)
 
-step (Value (VList (x:xs)), env, store, (BinOpH (BinConsOp (Value e1) env')):kon)
-    | checkTypeEq e1 x = step (Value (VList (e1:x:xs)), env', store, kon)
-    | otherwise = error "ERRORRRRR type issues plz fix."
+step (Value (VList xs), env, store, (BinOpH (BinConsOp (Value e1) env')):kon)
+    | getType (VList (e1:xs)) /= TConflict = step (Value (VList (e1:xs)), env', store, kon)
+    | otherwise = error $ "ERRORRRRR type issues plz fix: " ++ (show $ e1) ++ " : " ++ (show $ VList xs)
 
 -- if-elif-else statement.
 step (If c e1 e2, env, store, kon) = step (c, env, store, (HTerOp $ TerIfOp e1 e2 env):kon)
@@ -97,21 +98,34 @@ step s@(_, _, _, [Done]) = s
 -- No defined step for the current State.
 step (exp, env, store, kon) = error $ "ERROR evaluating expression " ++ (show exp) ++ ", no CESK step defined."
 
--- Checks the type of two ExprValue's, returning True if they are equal.
-checkTypeEq :: ExprValue -> ExprValue -> Bool
-checkTypeEq (VInt _) (VInt _) = True
-checkTypeEq (VBool _) (VBool _) = True
-checkTypeEq VNone VNone = True
-checkTypeEq (VList []) (VList []) = True
-checkTypeEq (VList []) (VList ((VList xs):_))
-    | length xs == 0 = True
-    | otherwise = helper (head xs)
-    where helper (VInt _) = True
-          helper (VBool _) = True
-          helper (VNone) = True
-          helper _ = False
-checkTypeEq (VList (xs:_)) (VList (ys:_)) = checkTypeEq xs ys
-checkTypeEq _ _ = False
+-- Gets the type of a Value, returning TConflict if the Value has conflicting types.
+getType :: ExprValue -> Type
+getType (VInt _) = TInt
+getType (VBool _) = TBool
+getType (VList []) = TList TEmpty
+getType (VList xs)
+    | length m == 0 = TList TEmpty
+    | length m == 1 = if (head m) == TConflict then TConflict else TList $ head m
+    | r == TConflict = TConflict
+    | otherwise = TList r
+    where m = map (getType) xs
+          r = helper (tail m) (head m)
+          helper [] t = t
+          helper (TInt:xs) TInt = helper xs TInt
+          helper (TInt:xs) TEmpty = helper xs TInt
+          helper (TBool:xs) TBool = helper xs TBool
+          helper (TBool:xs) TEmpty = helper xs TBool
+          helper (TEmpty:xs) acc = helper xs acc
+          helper e@((TList x):xs) (TList y)
+              | r' == TConflict = TConflict
+              | otherwise = TList r'
+              where r' = helper (helper' e) y
+                    helper' [] = []
+                    helper' (TEmpty:xs) = xs
+                    helper' ((TList x):xs) = x : helper' xs
+                    helper' _ = [TConflict]
+          helper _ _ = TConflict
+
 
 -- Binds a String (variable name) to an expression, updating the environment and store and returning them.
 updateEnvStore :: Environment -> Store -> String -> Expr -> (Environment, Store)

@@ -12,6 +12,7 @@ $alpha = [a-zA-Z]
 
 tokens :-
     $white+                             ;
+    "--".*                              ;
 
     if                                  { \p s -> TokenIf p }
     elif                                { \p s -> TokenElif p }
