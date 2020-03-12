@@ -12,7 +12,7 @@ type Store = Map.Map Address Expr
 type Kon = [ Frame ]
 
 -- Frame - Data structures to be put onto the Kontinuation.
-data BinOpFrame = BinCompOp ExprComp Expr -- Frame for a binary comparison operation - e.g. [-] == e2
+data BinOpFrame = BinCompOp ExprComp Expr Environment -- Frame for a binary comparison operation - e.g. [-] == e2
                 | BinSeqOp Expr -- Frame for a binary sequence operation - e.g. [-] ; e2
                 | BinConsOp Expr Environment
                 deriving (Show)
@@ -65,13 +65,15 @@ step (Var s, env, store, kon)
           val = Map.lookup (fromJust addr) store
 
 -- Equality binary operation.
-step (Op (CompOp Equality e1 e2), env, store, kon) = step (e1, env, store, (HBinOp $ BinCompOp Equality e2):kon)
+step (Op (CompOp Equality e1 e2), env, store, kon) = step (e1, env, store, (HBinOp $ BinCompOp Equality e2 env):kon)
+step (Value e1, env, store, (HBinOp (BinCompOp Equality e2 env')):kon) = step (e2, env', store, (BinOpH $ BinCompOp Equality (Value e1) env):kon)
+step (Value e2, env', store, (BinOpH (BinCompOp Equality (Value e1) env)):kon)
+    | getType e1 == getType e2 = step (Value $ VBool $ e1 == e2, env, store, kon)
+    | otherwise = error $ "Type Error: '==' operation must be between the same types, in " ++ (show e1) ++ " == " ++ (show e2)
 
-step (Value e1, env, store, (HBinOp (BinCompOp Equality e2)):kon) = step (e2, env, store, (BinOpH $ BinCompOp Equality $ Value e1):kon)
-
-step (Value (VBool b'), env, store, (BinOpH (BinCompOp Equality (Value (VBool b)))):kon) = step (Value $ VBool $ b == b', env, store, kon)
-step (Value (VInt n'), env, store, (BinOpH (BinCompOp Equality (Value (VInt n)))):kon) = step (Value $ VBool $ n == n', env, store, kon)
-step (Value e1, env, store, (BinOpH (BinCompOp Equality (Value e2))):kon) = error $ "Type Error: '==' operation must be between the same types, in " ++ (show e1) ++ " == " ++ (show e2)
+-- step (Value (VBool b'), env, store, (BinOpH (BinCompOp Equality (Value (VBool b)))):kon) = step (Value $ VBool $ b == b', env, store, kon)
+-- step (Value (VInt n'), env, store, (BinOpH (BinCompOp Equality (Value (VInt n)))):kon) = step (Value $ VBool $ n == n', env, store, kon)
+-- step (Value e1, env, store, (BinOpH (BinCompOp Equality (Value e2))):kon) = error $ "Type Error: '==' operation must be between the same types, in " ++ (show e1) ++ " == " ++ (show e2)
 
 -- Cons binary operation.
 step (Op (Cons e1 e2), env, store, kon) = step (e1, env, store, (HBinOp $ BinConsOp e2 env):kon)

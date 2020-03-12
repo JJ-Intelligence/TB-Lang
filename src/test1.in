@@ -8,10 +8,12 @@ if (y == 2) {
     x = 5
 };
 
-y = 4 : 5 : 4 : x : [6, 8]; -- should work
+y = [4,5] == [4]
 
-z = [[4,5], [4]] : []; -- should work
+-- y = 4 : 5 : 4 : x : [6, 8]; -- should work
 
-q = [] : [[4,5]]; -- should work
+-- z = [[4,5], [4]] : []; -- should work
+
+-- q = [] : [[4,5]]; -- should work
 
 -- v = [True] : [] : [[4,5]]; -- type error
