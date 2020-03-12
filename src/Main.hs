@@ -8,8 +8,5 @@ main :: IO ()
 main = do args <- getArgs
           case args of
                 [file] -> do f <- readFile file
-                             let xs = alexScanTokens f
-                             print $ parse xs
-                             print ""
-                             print $ eval $ parse xs
+                             print $ eval $ parse $ alexScanTokens f
                 _ -> print "Wrong number of arguments"

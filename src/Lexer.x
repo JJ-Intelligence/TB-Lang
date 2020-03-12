@@ -27,7 +27,17 @@ tokens :-
     \]                                  { \p _ -> TokenCloseSquare p }
     \,                                  { \p _ -> TokenComma p }
 
+    \+                                  { \p _ -> TokenPlus p }
+    \-                                  { \p _ -> TokenMinus p }
+    \*                                  { \p _ -> TokenMultiply p }
+    \/                                  { \p _ -> TokenDivide p }
+    \^                                  { \p _ -> TokenExponent p }
+    \%                                  { \p _ -> TokenModulus p }
     \=\=                                { \p s -> TokenDoubleEquals p }
+    \&\&                                { \p _ -> TokenAnd p }
+    \|\|                                { \p _ -> TokenOr p }
+    \<                                  { \p _ -> TokenLessThan p }
+    \>                                  { \p _ -> TokenGreaterThan p }
     \=                                  { \p s -> TokenEquals p }
     \:                                  { \p _ -> TokenCons p }
 
@@ -54,8 +64,18 @@ data Token =  TokenIf               {pos :: AlexPosn}
             | TokenCloseSquare      {pos :: AlexPosn}
             | TokenComma            {pos :: AlexPosn}
 
+            | TokenPlus             {pos :: AlexPosn}
+            | TokenMinus            {pos :: AlexPosn}
+            | TokenMultiply         {pos :: AlexPosn}
+            | TokenDivide           {pos :: AlexPosn}
+            | TokenExponent         {pos :: AlexPosn}
+            | TokenModulus          {pos :: AlexPosn}
             | TokenEquals           {pos :: AlexPosn}
             | TokenDoubleEquals     {pos :: AlexPosn}
+            | TokenAnd              {pos :: AlexPosn}
+            | TokenOr               {pos :: AlexPosn}
+            | TokenLessThan         {pos :: AlexPosn}
+            | TokenGreaterThan      {pos :: AlexPosn}
             | TokenCons             {pos :: AlexPosn}
 
             | TokenInt              {int :: Int, pos :: AlexPosn}
@@ -79,8 +99,18 @@ instance Show Token where
     show (TokenCloseSquare _) = "] "
     show (TokenComma _) = ", "
 
+    show (TokenPlus _) = "+ "
+    show (TokenMinus _) = "- "
+    show (TokenMultiply _) = "* "
+    show (TokenDivide _) = "/ "
+    show (TokenExponent _) = "^ "
+    show (TokenModulus _) = "% "
     show (TokenEquals _) = "= "
     show (TokenDoubleEquals _) = "== "
+    show (TokenAnd _) = "&& "
+    show (TokenOr _) = "|| "
+    show (TokenLessThan _) = "< "
+    show (TokenGreaterThan _) = "> "
     show (TokenCons _) = ": "
 
     show (TokenInt n _) = (show n) ++ " "

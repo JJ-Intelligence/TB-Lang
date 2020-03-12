@@ -15,6 +15,7 @@ type Kon = [ Frame ]
 data BinOpFrame = BinCompOp ExprComp Expr Environment -- Frame for a binary comparison operation - e.g. [-] == e2
                 | BinSeqOp Expr -- Frame for a binary sequence operation - e.g. [-] ; e2
                 | BinConsOp Expr Environment
+                | BinMathOp ExprMath Expr Environment
                 deriving (Show)
 
 data TerOpFrame = TerIfOp Expr (Maybe ExprElif) Environment -- Frame for a ternary if statement operation - e.g. if [-] then e1 e2 (e2 is the else/elif)
@@ -31,7 +32,20 @@ data Frame = HBinOp BinOpFrame
 -- State - The current state/configuration of the CESK machine.
 type State = (Expr, Environment, Store, Kon)
 
-data Type = TInt | TBool | TEmpty | TList Type | TConflict deriving (Eq, Show)
+-- Data types.
+data Type = TInt 
+          | TBool 
+          | TEmpty 
+          | TList Type 
+          | TConflict 
+          deriving (Eq)
+
+instance Show Type where 
+    show TInt = "Int"
+    show TBool = "Boolean"
+    show TEmpty = ""
+    show (TList t) = "[" ++ (show t) ++ "]" 
+    show TConflict = "Conflict"
 
 -- Evaluation function to take an Expression (Control) and run it on the finite state machine.
 eval :: Expr -> State
@@ -46,6 +60,7 @@ step (Literal (EInt n), env, store, kon) = step (Value $ VInt n, env, store, kon
 step (Literal (EBool n), env, store, kon) = step (Value $ VBool n, env, store, kon)
 step (Literal Empty, env, store, kon) = step (Value $ VList [], env, store, kon)
 
+-- Sequence operation ';'.
 step (Seq e1 e2, env, store, kon) = step (e1, env, store, (HBinOp $ BinSeqOp e2):kon)
 step (Value e1, env, store, (HBinOp (BinSeqOp e2)):kon) = step (e2, env, store, kon)
 
@@ -58,32 +73,54 @@ step (Value e1, env, store, (DefVarFrame s env'):kon) = step (Value e1, env'', s
 
 -- Accessing a variable reference.
 step (Var s, env, store, kon) 
-    | addr == Nothing = error $ "Variable " ++ s ++ " is not in the Environment."
+    | addr == Nothing = error $ "Variable " ++ s ++ " is not in the Environment (has not been defined)."
     | val == Nothing = error $ "Variable " ++ s ++ " is not in the Store."
     | otherwise = step (fromJust val, env, store, kon)
     where addr = Map.lookup s env
           val = Map.lookup (fromJust addr) store
 
--- Equality binary operation.
-step (Op (CompOp Equality e1 e2), env, store, kon) = step (e1, env, store, (HBinOp $ BinCompOp Equality e2 env):kon)
-step (Value e1, env, store, (HBinOp (BinCompOp Equality e2 env')):kon) = step (e2, env', store, (BinOpH $ BinCompOp Equality (Value e1) env):kon)
+-- Math binary operations.
+step (Op (MathOp op e1 e2), env, store, kon) = step (e1, env, store, (HBinOp $ BinMathOp op e2 env):kon)
+step (Value e1, env, store, (HBinOp (BinMathOp op e2 env')):kon) = step (e2, env', store, (BinOpH $ BinMathOp op (Value e1) env):kon)
+step (Value (VInt n'), env', store, (BinOpH (BinMathOp op (Value (VInt n)) env)):kon) = step (Value $ VInt r, env, store, kon)
+    where r = case op of
+                    Plus -> n + n'
+                    Min -> n - n'
+                    Mult -> n * n'
+                    Div -> n `div` n'
+                    Exp -> n ^ n'
+                    Mod -> n `mod` n'
+step (Value e2, env', store, (BinOpH (BinMathOp op (Value e1) env)):kon) = typeError (Value e1) (show op) (Value e2) "Integer"
+
+-- Binary comparison operations: ==, &&, ||, <, >
+step (Op (CompOp op e1 e2), env, store, kon) = step (e1, env, store, (HBinOp $ BinCompOp op e2 env):kon)
+step (Value e1, env, store, (HBinOp (BinCompOp op e2 env')):kon) = step (e2, env', store, (BinOpH $ BinCompOp op (Value e1) env):kon)
+
+-- Boolean &&, || operations.
+step (Value (VBool b'), env', store, (BinOpH (BinCompOp And (Value (VBool b)) env)):kon) = step (Value $ VBool $ b && b', env, store, kon)
+step (Value e2, env', store, (BinOpH (BinCompOp And (Value e1) env)):kon) = typeError (Value e1) (show And) (Value e2) "Boolean"
+step (Value (VBool b'), env', store, (BinOpH (BinCompOp Or (Value (VBool b)) env)):kon) = step (Value $ VBool $ b || b', env, store, kon)
+step (Value e2, env', store, (BinOpH (BinCompOp Or (Value e1) env)):kon) = typeError (Value e1) (show Or) (Value e2) "Boolean"
+
+-- Comparison ==, <, > operations.
+step (Value (VInt n'), env', store, (BinOpH (BinCompOp LessThan (Value (VInt n)) env)):kon) = step (Value $ VBool $ n < n', env, store, kon)
+step (Value e2, env', store, (BinOpH (BinCompOp LessThan (Value e1) env)):kon) = typeError (Value e1) (show LessThan) (Value e2) "Integer"
+step (Value (VInt n'), env', store, (BinOpH (BinCompOp GreaterThan (Value (VInt n)) env)):kon) = step (Value $ VBool $ n > n', env, store, kon)
+step (Value e2, env', store, (BinOpH (BinCompOp GreaterThan (Value e1) env)):kon) = typeError (Value e1) (show GreaterThan) (Value e2) "Integer"
+
 step (Value e2, env', store, (BinOpH (BinCompOp Equality (Value e1) env)):kon)
     | getType e1 == getType e2 = step (Value $ VBool $ e1 == e2, env, store, kon)
-    | otherwise = error $ "Type Error: '==' operation must be between the same types, in " ++ (show e1) ++ " == " ++ (show e2)
-
--- step (Value (VBool b'), env, store, (BinOpH (BinCompOp Equality (Value (VBool b)))):kon) = step (Value $ VBool $ b == b', env, store, kon)
--- step (Value (VInt n'), env, store, (BinOpH (BinCompOp Equality (Value (VInt n)))):kon) = step (Value $ VBool $ n == n', env, store, kon)
--- step (Value e1, env, store, (BinOpH (BinCompOp Equality (Value e2))):kon) = error $ "Type Error: '==' operation must be between the same types, in " ++ (show e1) ++ " == " ++ (show e2)
+    | otherwise = typeError (Value e1) (show Equality) (Value e2) []
 
 -- Cons binary operation.
 step (Op (Cons e1 e2), env, store, kon) = step (e1, env, store, (HBinOp $ BinConsOp e2 env):kon)
 step (Value e1, env, store, (HBinOp (BinConsOp e2 env')):kon) = step (e2, env', store, (BinOpH (BinConsOp (Value e1) env')):kon)
 
-step (Value (VList []), env, store, (BinOpH (BinConsOp (Value e1) env')):kon) = step (Value $ VList [e1], env', store, kon)
+step (Value (VList []), env, store, (BinOpH (BinConsOp (Value e1) env')):kon) = step (Value $ VList [e1], env', store, kon) -- Don't think we need this line
 
 step (Value (VList xs), env, store, (BinOpH (BinConsOp (Value e1) env')):kon)
     | getType (VList (e1:xs)) /= TConflict = step (Value (VList (e1:xs)), env', store, kon)
-    | otherwise = error $ "ERRORRRRR type issues plz fix: " ++ (show $ e1) ++ " : " ++ (show $ VList xs)
+    | otherwise = typeError (Value e1) ":" (Value $ VList xs) []
 
 -- if-elif-else statement.
 step (If c e1 e2, env, store, kon) = step (c, env, store, (HTerOp $ TerIfOp e1 e2 env):kon)
@@ -156,3 +193,9 @@ updateStore store a e1
     | item == Nothing = Map.insert a e1 store
     | otherwise = Map.update (\x -> Just e1) a store
     where item = Map.lookup a store
+
+-- Type error between Expr e1 and Expr e2, using operator String s, which uses type String t.
+typeError :: Expr -> String -> Expr -> String -> a
+typeError e1 s e2 [] = typeError e1 s e2 "the same"
+typeError (Value e1) s (Value e2) t = error $ "\n\nType Error: '" ++ s ++ "' operator must be between " ++ t ++ " types, in " ++ (show e1) ++ " "++s++" " ++ (show e2) ++ 
+                        ".\nThe type of expression 1 is " ++ (show $ getType e1) ++ ", but the type of expression 2 is " ++ (show $ getType e2) ++ ".\n"
