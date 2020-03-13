@@ -11,6 +11,9 @@ import Lexer
     elif   { TokenElif _ }
     else   { TokenElse _ }
 
+    func   { TokenFuncDef _ }
+    return { TokenReturn _ }
+
     ';'    { TokenSeq _ }
     '('    { TokenOpenParen _ }
     ')'    { TokenCloseParen _ }
@@ -55,12 +58,17 @@ E : E ';' E                         { Seq $1 $3 }
   | E ';'                           { $1 }
   | if '(' E ')' B EElif            { If $3 $5 (Just $6) }
   | if '(' E ')' B                  { If $3 $5 Nothing }
+  | func var '(' P ')' '=' E        { DefVar $2 (Func $4 $7) }
+  | return E                        { Return $2 }
   | var '=' E                       { DefVar $1 $3 }
   | var                             { Var $1 }
   | B                               { $1 }
   | O                               { $1 }
   | C                               { $1 }
   | L                               { $1 }
+
+P : E ',' P                         { FuncParam $1 $3 }
+  | E                               { FuncParamEnd }
 
 -- Elif part of an If statement.
 EElif : elif '(' E ')' B EElif      { Elif $3 $5 (Just $6) }
@@ -182,7 +190,18 @@ instance Show ExprMath where
   show Exp = "^"
   show Mod = "%"
 
+data Parameter = FuncParam Expr Parameter
+               | FuncParamEnd
+               deriving (Eq)
+
+instance Show Parameter where
+  show (FuncParam e1 FuncParamEnd) = show e1
+  show (FuncParam e1 (Just e2)) = (show e1) ++ ", " ++ (show e2)
+  show (FuncParamEnd) = ""
+
 data Expr = If Expr Expr (Maybe ExprElif)
+          | Func Parameter Expr
+          | Return Expr
           | Literal ExprLiteral
           | Value ExprValue
           | Op BinOp
@@ -194,6 +213,8 @@ data Expr = If Expr Expr (Maybe ExprElif)
 instance Show Expr where
   show (If c e1 Nothing) = "if (" ++ (show c) ++ ") {\n" ++ (show e1) ++ "\n}\n"
   show (If c e1 (Just e2)) = "if (" ++ (show c) ++ ") {\n" ++ (show e1) ++ "\n} " ++ (show e2)
+  show (DefVar s (Func ps e1)) = "func " ++ s ++ " (" ++ (show ps) ++ ") = {\n" ++ (show e1) ++ "}\n" 
+  show (Return e1) = "return " ++ (show e1)
   show (Literal l) = show l
   show (Value v) = show v
   show (Op op) = show op
