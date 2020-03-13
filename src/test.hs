@@ -16,11 +16,32 @@ simpleTests =
              (getValue $ interpret "False") == Value (VBool False)
         ],
         [ -- Basic lists stuff eval
-            (getValue $ interpret "[]") == Value (VList [])
---             (getValue $ interpret "-2") == Value (VInt (-2)),
---             (getValue $ interpret "True") == Value (VBool True),
---             (getValue $ interpret "False") == Value (VBool False)
-        ]
+            (getValue $ interpret "[]") == Value (VList []),
+            (getValue $ interpret "[1]") == Value (VList [VInt 1]),
+            (getValue $ interpret "[True]") == Value (VList [VBool True]),
+            (getValue $ interpret "[1, 2]") == Value (VList [VInt 1, VInt 2]),
+            (getValue $ interpret "[[1], [3]]") == Value (VList [VList [VInt 1], VList [VInt 3]]),
+            (getValue $ interpret "[[True], [False]]") == Value (VList [VList [VBool True], VList [VBool False]])
+        ],
+         [ -- Operators
+             (getValue $ interpret "1+2") == Value (VInt 3),
+             (getValue $ interpret "1-2") == Value (VInt (-1)),
+             (getValue $ interpret "4/2") == Value (VInt 2),
+             (getValue $ interpret "3/2") == Value (VInt 1),
+             (getValue $ interpret "3*2") == Value (VInt 6),
+             (getValue $ interpret "1<2") == Value (VBool True),
+             (getValue $ interpret "2>1") == Value (VBool True),
+             (getValue $ interpret "1>2") == Value (VBool False),
+             (getValue $ interpret "2<1") == Value (VBool False),
+             (getValue $ interpret "6%2") == Value (VInt 3),
+             (getValue $ interpret "True && True") == Value (VBool True),
+             (getValue $ interpret "False && True") == Value (VBool False),
+             (getValue $ interpret "False || True") == Value (VBool True),
+             (getValue $ interpret "True || False") == Value (VBool True),
+             (getValue $ interpret "False || False") == Value (VBool False),
+             (getValue $ interpret "3 == 3") == Value (VBool True),
+             (getValue $ interpret "5 == 1") == Value (VBool False)
+         ]
     ]
 
 
@@ -34,6 +55,11 @@ main =
     simpleTestSuite simpleTests
     putStrLn "... Completed ..."
 
+fails :: [Bool] -> Int -> String
+fails [] _ = ""
+fails (x:xs) i | x==True = fails (xs) (i+1)
+               | otherwise = ("\n\t\tTest failed: " ++ (show (i))) ++ fails (xs) (i+1)
+
 -- process one test suite at a time
 simpleTestSuite :: [[Bool]] -> IO ()
 simpleTestSuite [] =
@@ -41,5 +67,5 @@ simpleTestSuite [] =
     putStr ""
 simpleTestSuite (bs : bbs) =
   do
-    putStrLn ("  " ++ show (length [b | b <- bs, b]) ++ " tests passed out of " ++ show (length bs))
+    putStrLn ("  " ++ show (length [b | b <- bs, b]) ++ " tests passed out of " ++ show (length bs) ++ (fails [b | b <- bs] 0))
     simpleTestSuite bbs
