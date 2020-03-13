@@ -196,7 +196,7 @@ data Parameter = FuncParam Expr Parameter
 
 instance Show Parameter where
   show (FuncParam e1 FuncParamEnd) = show e1
-  show (FuncParam e1 (Just e2)) = (show e1) ++ ", " ++ (show e2)
+  show (FuncParam e1 e2) = (show e1) ++ ", " ++ (show e2)
   show (FuncParamEnd) = ""
 
 data Expr = If Expr Expr (Maybe ExprElif)

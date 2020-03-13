@@ -1,2 +1,2 @@
 cd src
-Main.exe "test1.in"
+Main.exe "test1.spl"

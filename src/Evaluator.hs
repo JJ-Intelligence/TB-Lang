@@ -90,6 +90,9 @@ step (Value (VInt n'), env', store, (BinOpH (BinMathOp op (Value (VInt n)) env))
                     Div -> n `div` n'
                     Exp -> n ^ n'
                     Mod -> n `mod` n'
+step (Value (VList n'), env', store, (BinOpH (BinMathOp Plus (Value (VList n)) env)):kon)
+    | getType (VList (n ++ n')) /= TConflict = step (Value $ VList (n ++ n'), env, store, kon)
+    | otherwise = typeError (Value (VList n)) (show Plus) (Value (VList n')) []
 step (Value e2, env', store, (BinOpH (BinMathOp op (Value e1) env)):kon) = typeError (Value e1) (show op) (Value e2) "Integer"
 
 -- Binary comparison operations: ==, &&, ||, <, >
