@@ -194,6 +194,23 @@ updateStore store a e1
     | otherwise = Map.update (\x -> Just e1) a store
     where item = Map.lookup a store
 
+-- Read n lines of input into stream buffers (a list of lists).
+readInput :: [[Int]] -> Int -> IO [[Int]]
+readInput xs 0 = return xs
+readInput [] n
+    | n > 0 = do
+        line <- getLine
+        let line' = foldr (\x acc -> [x]:acc) [] $ map (read :: String -> Int) $ words line
+        readInput line' (n-1)
+    | otherwise = error "Error in readInput function, must read at least one line of input."
+readInput xs n = do 
+    line <- getLine
+    let line' = map (read :: String -> Int) $ words line
+    let xs' = if (length xs /= length line') then (error "Error in readInput function, input is not in the correct format.") else (helper xs line')
+    readInput xs' (n-1)
+        where helper [] [] = []
+              helper (ys:yss) (x:xs) = (x:ys) : helper yss xs
+
 -- Type error between Expr e1 and Expr e2, using operator String s, which uses type String t.
 typeError :: Expr -> String -> Expr -> String -> a
 typeError e1 s e2 [] = typeError e1 s e2 "the same"
