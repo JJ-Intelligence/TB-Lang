@@ -201,6 +201,20 @@ updateStore store a e1
     | otherwise = Map.update (\x -> Just e1) a store
     where item = Map.lookup a store
 
+-- readInputWrapper :: Int -> Store -> (Int, Store)
+-- readInputWrapper streamI store
+--     | length $ buffer > streamI || (length $ buffer) == 0 = (head newBuffer,  updateStore 1 (VInputBuffer newBuffer) store)
+--     | otherwise = (head buffer, updateStore 1 (VInputBuffer ) store)
+--     where
+--         buffer = buffers !! streamI
+--         buffers = removeVInputBuffer (lookup 1 store)
+--         newBuffer = readInput buffers 1
+--         removeVInputBuffer (VInputBuffer e) = e
+
+output :: ExprValue -> IO ()
+output v = do
+    print (show v)
+
 -- Read n lines of input into stream buffers (a list of lists).
 readInput :: [[Int]] -> Int -> IO [[Int]]
 readInput xs 0 = return xs
@@ -217,6 +231,9 @@ readInput xs n = do
     readInput xs' (n-1)
         where helper [] [] = []
               helper (ys:yss) (x:xs) = (x:ys) : helper yss xs
+
+
+
 
 -- Type error between Expr e1 and Expr e2, using operator String s, which uses type String t.
 typeError :: Expr -> String -> Expr -> String -> a

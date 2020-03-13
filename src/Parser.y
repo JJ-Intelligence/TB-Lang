@@ -135,6 +135,7 @@ instance Show ExprLiteral where
 data ExprValue = VInt Int
                | VBool Bool
                | VList [ExprValue]
+               | VInputBuffer [[Int]]
                | VNone
                deriving (Eq)
 
