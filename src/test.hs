@@ -10,10 +10,10 @@ simpleTests :: [[Bool]]
 simpleTests =
     [
         [ -- Basic value eval
-             (getValue $ interpret "1") == Value (VInt 1),
-             (getValue $ interpret "-2") == Value (VInt (-2)),
-             (getValue $ interpret "True") == Value (VBool True),
-             (getValue $ interpret "False") == Value (VBool False)
+            (getValue $ interpret "1") == Value (VInt 1),
+            (getValue $ interpret "-2") == Value (VInt (-2)),
+            (getValue $ interpret "True") == Value (VBool True),
+            (getValue $ interpret "False") == Value (VBool False)
         ],
         [ -- Basic lists stuff eval
             (getValue $ interpret "[]") == Value (VList []),
@@ -23,32 +23,43 @@ simpleTests =
             (getValue $ interpret "[[1], [3]]") == Value (VList [VList [VInt 1], VList [VInt 3]]),
             (getValue $ interpret "[[True], [False]]") == Value (VList [VList [VBool True], VList [VBool False]])
         ],
-         [ -- Operators
-             (getValue $ interpret "1+2") == Value (VInt 3),
-             (getValue $ interpret "1-2") == Value (VInt (-1)),
-             (getValue $ interpret "4/2") == Value (VInt 2),
-             (getValue $ interpret "3/2") == Value (VInt 1),
-             (getValue $ interpret "3*2") == Value (VInt 6),
-             (getValue $ interpret "1<2") == Value (VBool True),
-             (getValue $ interpret "2>1") == Value (VBool True),
-             (getValue $ interpret "1>2") == Value (VBool False),
-             (getValue $ interpret "2<1") == Value (VBool False),
-             (getValue $ interpret "6%2") == Value (VInt 0),
-             (getValue $ interpret "True && True") == Value (VBool True),
-             (getValue $ interpret "False && True") == Value (VBool False),
-             (getValue $ interpret "False || True") == Value (VBool True),
-             (getValue $ interpret "True || False") == Value (VBool True),
-             (getValue $ interpret "False || False") == Value (VBool False),
-             (getValue $ interpret "3 == 3") == Value (VBool True),
-             (getValue $ interpret "5 == 1") == Value (VBool False)
-         ],
-         [ -- Compound operators
-             (getValue $ interpret "1+2+6") == Value (VInt 9),
-             (getValue $ interpret "1+2*6") == Value (VInt 13),
-             (getValue $ interpret "(1+2)*6") == Value (VInt 18),
-             (getValue $ interpret "1+(2*6)") == Value (VInt 13),
-             (getValue $ interpret "1+(2*6)*2") == Value (VInt 25)
-         ]
+        [ -- Operators
+            (getValue $ interpret "1+2") == Value (VInt 3),
+            (getValue $ interpret "1-2") == Value (VInt (-1)),
+            (getValue $ interpret "4/2") == Value (VInt 2),
+            (getValue $ interpret "3/2") == Value (VInt 1),
+            (getValue $ interpret "3*2") == Value (VInt 6),
+            (getValue $ interpret "1<2") == Value (VBool True),
+            (getValue $ interpret "2>1") == Value (VBool True),
+            (getValue $ interpret "1>2") == Value (VBool False),
+            (getValue $ interpret "2<1") == Value (VBool False),
+            (getValue $ interpret "6%2") == Value (VInt 0),
+            (getValue $ interpret "True && True") == Value (VBool True),
+            (getValue $ interpret "False && True") == Value (VBool False),
+            (getValue $ interpret "False || True") == Value (VBool True),
+            (getValue $ interpret "True || False") == Value (VBool True),
+            (getValue $ interpret "False || False") == Value (VBool False),
+            (getValue $ interpret "3 == 3") == Value (VBool True),
+            (getValue $ interpret "5 == 1") == Value (VBool False)
+        ],
+        [ -- Compound operators
+            (getValue $ interpret "1+2+6") == Value (VInt 9),
+            (getValue $ interpret "1+2*6") == Value (VInt 13),
+            (getValue $ interpret "(1+2)*6") == Value (VInt 18),
+            (getValue $ interpret "1+(2*6)") == Value (VInt 13),
+            (getValue $ interpret "2/(2+6)") == Value (VInt 0),
+            (getValue $ interpret "1+(2*6)*2") == Value (VInt 25)
+        ],
+        [ -- Conditional expressions
+            (getValue $ interpret "if (True) {3} else {1}") == Value (VInt 3),
+            (getValue $ interpret "if (False) {3} else {1}") == Value (VInt 1),
+            (getValue $ interpret "if (1 < 2) {3} else {1}") == Value (VInt 3),
+            (getValue $ interpret "if (1 > 2) {3} else {1}") == Value (VInt 1),
+            (getValue $ interpret "if (1 > 0) {1} elif (3 < 4) {2} else {3}") == Value (VInt 1),
+            (getValue $ interpret "if (1 > 2) {1} elif (3 < 4) {2} else {3}") == Value (VInt 2),
+            (getValue $ interpret "if (1 > 2) {1} elif (3 < 2) {2} else {3}") == Value (VInt 3),
+            (getValue $ interpret "if (False) {1} elif (False) {2} elif (True) {3} else {4}") == Value (VInt 3),
+        ]
     ]
 
 
