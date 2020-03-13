@@ -1,5 +1,6 @@
 module Evaluator where
 import Parser
+import Lexer
 import qualified Data.Map.Strict as Map
 import Data.Maybe
 
@@ -46,6 +47,9 @@ instance Show Type where
     show TEmpty = ""
     show (TList t) = "[" ++ (show t) ++ "]" 
     show TConflict = "Conflict"
+
+interpret :: String -> State
+interpret s = eval $ parse $ alexScanTokens s
 
 -- Evaluation function to take an Expression (Control) and run it on the finite state machine.
 eval :: Expr -> State
