@@ -1,55 +1,18 @@
 module Evaluator where
-import Parser
+import Expression
 import qualified Data.Map.Strict as Map
 import Data.Maybe
 
--- Environment - A mapping of functions and variables to Closures (which maps an Expression to an Environment).
-type Address = Int
-type Environment = Map.Map String Address
-type Store = Map.Map Address Expr
+-- Reserved elements of the Store.
+funcCallStack = 0
 
--- Kontinuation - A stack containing Frames showing what to do.
-type Kon = [ Frame ]
+insertReserved :: Store -> Store
+insertReserved store = Map.insert funcCallStack (CallStack []) Map.empty
 
--- Frame - Data structures to be put onto the Kontinuation.
-data BinOpFrame = BinCompOp ExprComp Expr Environment -- Frame for a binary comparison operation - e.g. [-] == e2
-                | BinSeqOp Expr -- Frame for a binary sequence operation - e.g. [-] ; e2
-                | BinConsOp Expr Environment
-                | BinMathOp ExprMath Expr Environment
-                deriving (Show)
-
-data TerOpFrame = TerIfOp Expr (Maybe ExprElif) Environment -- Frame for a ternary if statement operation - e.g. if [-] then e1 e2 (e2 is the else/elif)
-                deriving (Show)
-
-data Frame = HBinOp BinOpFrame
-           | BinOpH BinOpFrame
-           | HTerOp TerOpFrame
-           | TerOpH TerOpFrame
-           | DefVarFrame String Environment
-           | Done 
-           deriving (Show)
-
--- State - The current state/configuration of the CESK machine.
-type State = (Expr, Environment, Store, Kon)
-
--- Data types.
-data Type = TInt 
-          | TBool 
-          | TEmpty 
-          | TList Type 
-          | TConflict 
-          deriving (Eq)
-
-instance Show Type where 
-    show TInt = "Int"
-    show TBool = "Boolean"
-    show TEmpty = ""
-    show (TList t) = "[" ++ (show t) ++ "]" 
-    show TConflict = "Conflict"
 
 -- Evaluation function to take an Expression (Control) and run it on the finite state machine.
 eval :: Expr -> State
-eval e = step (e, Map.empty, Map.empty, [Done])
+eval e = step (e, Map.empty, insertReserved Map.empty, [Done])
 
 
 -- Step function to move from one State to another.
@@ -64,20 +27,46 @@ step (Literal Empty, env, store, kon) = step (Value $ VList [], env, store, kon)
 step (Seq e1 e2, env, store, kon) = step (e1, env, store, (HBinOp $ BinSeqOp e2):kon)
 step (Value e1, env, store, (HBinOp (BinSeqOp e2)):kon) = step (e2, env, store, kon)
 
+-- Defining a new Function.
+step (DefVar s (Func ps e1), env, store, kon) = step (Value VNone, env', store', kon)
+    where (env', store') = updateEnvStore env store s (VFunc [(ps, e1)])
+
 -- Defining a new Var.
 -- Looks for the variable in the Env, and replaces it in the Store if it exists, else it creates it.
 step (DefVar s e1, env, store, kon) = step (e1, env, store, (DefVarFrame s env):kon)
 
-step (Value e1, env, store, (DefVarFrame s env'):kon) = step (Value e1, env'', store', kon)
-    where (env'', store') = updateEnvStore env' store s (Value e1)
+step (Value e1, env, store, (DefVarFrame s env'):kon) = step (Value VNone, env'', store', kon)
+    where (env'', store') = updateEnvStore env' store s e1
 
 -- Accessing a variable reference.
 step (Var s, env, store, kon) 
     | addr == Nothing = error $ "Variable " ++ s ++ " is not in the Environment (has not been defined)."
     | val == Nothing = error $ "Variable " ++ s ++ " is not in the Store."
-    | otherwise = step (fromJust val, env, store, kon)
+    | otherwise = step (Value $ fromJust val, env, store, kon)
     where addr = Map.lookup s env
           val = Map.lookup (fromJust addr) store
+
+-- Function call.
+step (FuncCall s ps, env, store, kon)
+    | addr == Nothing = error $ "Function " ++ s ++ " is not in the Environment (has not been defined)."
+    | val == Nothing = error $ "Function " ++ s ++ " is not in the Store."
+    | otherwise = step (e1, env', store'', kon)
+    where (e1, env', store') = matchFuncPattern ps (fromJust val) env store
+          addr = Map.lookup s env
+          val = Map.lookup (fromJust addr) store
+          store'' = updateStore store' funcCallStack (CallStack [ (env, kon) ])
+
+-- (Literal (EInt 5),fromList [("solve",1),("x",2),("y",3)],fromList [
+--     (0,CallStack [(fromList [("solve",1)],[HBinOp (BinSeqOp (DefVar "y" (FuncCall "solve" (FuncParam (Literal (EInt 4)) (FuncParam (Literal (EInt 5)) FuncParamEnd))))),Done])])
+--     ,(1,VFunc [(FuncParam (Var "x") (FuncParam (Var "y") FuncParamEnd),Return (Literal (EInt 5)))]),(2,VInt 4),(3,VInt 5)],[ReturnFrame,DefVarFrame "y" (fromList [("solve",1)]),Done])
+
+-- Returning from a function.
+step (Return e1, env, store, kon) = step (e1, env, store, ReturnFrame:kon)
+step (Value e1, env, store, ReturnFrame:kon)
+    | length xs == 0 = error "Nothing on the CallStack, so can't return!"
+    | otherwise = step (Value e1, env', store, kon')
+    where (Just (CallStack xs)) = Map.lookup funcCallStack store
+          (env', kon') = head xs
 
 -- Math binary operations.
 step (Op (MathOp op e1 e2), env, store, kon) = step (e1, env, store, (HBinOp $ BinMathOp op e2 env):kon)
@@ -137,6 +126,51 @@ step s@(_, _, _, [Done]) = s
 -- No defined step for the current State.
 step (exp, env, store, kon) = error $ "ERROR evaluating expression " ++ (show exp) ++ ", no CESK step defined."
 
+-- Match parameters to a function
+matchFuncPattern :: Parameters -> ExprValue -> Environment -> Store -> (Expr, Environment, Store)
+matchFuncPattern _ (VFunc []) _ _ = error "No matching patterns for that function."
+matchFuncPattern ps (VFunc ((ps',e1):xs)) env store
+    | e == Nothing = matchFuncPattern ps (VFunc xs) env store
+    | otherwise = (e1, env', store')
+    where e = patternMatch ps ps' env store
+          (Just (env', store')) = e
+
+-- Match inputted parameters (values) with function parameters (not values - e.g. cons operation)
+patternMatch :: Parameters -> Parameters -> Environment -> Store -> Maybe (Environment, Store)
+patternMatch FuncParamEnd FuncParamEnd env store = Just (env, store)
+patternMatch FuncParamEnd _ _ _ = Nothing
+patternMatch _ FuncParamEnd _ _ = Nothing
+patternMatch (FuncParam e1 xs) (FuncParam y ys) env store
+    | e == Nothing = Nothing
+    | otherwise = patternMatch xs ys env' store'
+    where (Value x,_,_,_) = step (e1, env, store, [Done])
+          e = matchExprs x y env store
+          (Just (env', store')) = e
+
+          matchExprs (VList []) (Literal Empty) env store = Just (env, store)
+          
+          matchExprs (VList xs) (Var s) env store = Just (env', store')
+            where (env', store') = updateEnvStore env store s (VList xs)
+
+          matchExprs (VList (x:xs)) (Op (Cons e1 e2)) env store
+            | e == Nothing = Nothing
+            | otherwise = matchExprs (VList xs) e2 env' store'
+            where e = matchValToExpr x e1 env store
+                  (Just (env', store')) = e
+
+          matchExprs val e1 env store = matchValToExpr x e1 env store
+
+            -- Match a value to a literal expression.
+          matchValToExpr e1 (Var s) env store = Just $ updateEnvStore env store s e1
+          matchValToExpr (VInt n) (Literal (EInt n')) env store
+            | n == n' = Just (env, store)
+            | otherwise = Nothing
+          matchValToExpr (VBool b) (Literal (EBool b')) env store
+            | b == b' = Just (env, store)
+            | otherwise = Nothing
+          matchValToExpr _ _ _ _ = Nothing
+
+
 -- Gets the type of a Value, returning TConflict if the Value has conflicting types.
 getType :: ExprValue -> Type
 getType (VInt _) = TInt
@@ -167,7 +201,7 @@ getType (VList xs)
 
 
 -- Binds a String (variable name) to an expression, updating the environment and store and returning them.
-updateEnvStore :: Environment -> Store -> String -> Expr -> (Environment, Store)
+updateEnvStore :: Environment -> Store -> String -> ExprValue -> (Environment, Store)
 updateEnvStore env store s e1 = (env', updateStore store addr e1)
     where (env', addr) = case Map.lookup s env of
                                 Just (a) -> (env, a)
@@ -188,7 +222,14 @@ addToEnv env store s
 
 -- Updates an Address mapping in the store.
 -- If the inputted Address is not in the store, then it will be inserted.
-updateStore :: Store -> Address -> Expr -> Store
+updateStore :: Store -> Address -> ExprValue -> Store
+updateStore store a e@(CallStack xs) = Map.update (\x -> Just (CallStack (xs ++ ys))) a store
+    where (Just (CallStack ys)) = Map.lookup a store
+updateStore store a e@(VFunc xs)
+    | (Map.lookup a store) == Nothing = Map.insert a e store
+    | otherwise = Map.update (\x -> Just (VFunc (ys ++ xs))) a store
+    where (Just (VFunc ys)) = Map.lookup a store
+
 updateStore store a e1
     | item == Nothing = Map.insert a e1 store
     | otherwise = Map.update (\x -> Just e1) a store
@@ -216,3 +257,6 @@ typeError :: Expr -> String -> Expr -> String -> a
 typeError e1 s e2 [] = typeError e1 s e2 "the same"
 typeError (Value e1) s (Value e2) t = error $ "\n\nType Error: '" ++ s ++ "' operator must be between " ++ t ++ " types, in " ++ (show e1) ++ " "++s++" " ++ (show e2) ++ 
                         ".\nThe type of expression 1 is " ++ (show $ getType e1) ++ ", but the type of expression 2 is " ++ (show $ getType e2) ++ ".\n"
+
+
+
