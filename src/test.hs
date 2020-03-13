@@ -33,7 +33,7 @@ simpleTests =
              (getValue $ interpret "2>1") == Value (VBool True),
              (getValue $ interpret "1>2") == Value (VBool False),
              (getValue $ interpret "2<1") == Value (VBool False),
-             (getValue $ interpret "6%2") == Value (VInt 3),
+             (getValue $ interpret "6%2") == Value (VInt 0),
              (getValue $ interpret "True && True") == Value (VBool True),
              (getValue $ interpret "False && True") == Value (VBool False),
              (getValue $ interpret "False || True") == Value (VBool True),
@@ -41,6 +41,13 @@ simpleTests =
              (getValue $ interpret "False || False") == Value (VBool False),
              (getValue $ interpret "3 == 3") == Value (VBool True),
              (getValue $ interpret "5 == 1") == Value (VBool False)
+         ],
+         [ -- Compound operators
+             (getValue $ interpret "1+2+6") == Value (VInt 9),
+             (getValue $ interpret "1+2*6") == Value (VInt 13),
+             (getValue $ interpret "(1+2)*6") == Value (VInt 18),
+             (getValue $ interpret "1+(2*6)") == Value (VInt 13),
+             (getValue $ interpret "1+(2*6)*2") == Value (VInt 25)
          ]
     ]
 
