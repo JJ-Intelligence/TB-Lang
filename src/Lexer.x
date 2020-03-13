@@ -17,6 +17,8 @@ tokens :-
     if                                  { \p s -> TokenIf p }
     elif                                { \p s -> TokenElif p }
     else                                { \p s -> TokenElse p }
+    func                                { \p s -> TokenFuncDef p }
+    return                              { \p s -> TokenReturn p }
 
     \;                                  { \p s -> TokenSeq p }
     \(                                  { \p s -> TokenOpenParen p }
@@ -54,6 +56,9 @@ tokens :-
 data Token =  TokenIf               {pos :: AlexPosn}
             | TokenElif             {pos :: AlexPosn}
             | TokenElse             {pos :: AlexPosn}
+
+            | TokenFuncDef          {pos :: AlexPosn}
+            | TokenReturn           {pos :: AlexPosn}
             
             | TokenSeq              {pos :: AlexPosn}
             | TokenOpenParen        {pos :: AlexPosn}
@@ -89,6 +94,9 @@ instance Show Token where
     show (TokenIf _) = "if "
     show (TokenElif _) = "elif "
     show (TokenElse _) = "else "
+
+    show (TokenFuncDef _) = "func "
+    show (TokenReturn _) = "return "
 
     show (TokenSeq _) = "; "
     show (TokenOpenParen _) = "( "
