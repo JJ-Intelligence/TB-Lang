@@ -1,7 +1,10 @@
 module Evaluator where
 import Expression
+import Parser
+import Lexer
 import qualified Data.Map.Strict as Map
 import Data.Maybe
+import Debug.Trace
 
 -- Reserved elements of the Store.
 funcCallStack = 0
@@ -9,6 +12,9 @@ funcCallStack = 0
 insertReserved :: Store -> Store
 insertReserved store = Map.insert funcCallStack (CallStack []) Map.empty
 
+
+interpret :: String -> State
+interpret s = eval $ parse $ alexScanTokens s
 
 -- Evaluation function to take an Expression (Control) and run it on the finite state machine.
 eval :: Expr -> State
@@ -51,22 +57,19 @@ step (FuncCall s ps, env, store, kon)
     | addr == Nothing = error $ "Function " ++ s ++ " is not in the Environment (has not been defined)."
     | val == Nothing = error $ "Function " ++ s ++ " is not in the Store."
     | otherwise = step (e1, env', store'', kon)
-    where (e1, env', store') = matchFuncPattern ps (fromJust val) env store
+    where store' = updateStore store funcCallStack (CallStack [ (env, kon) ])
+          (e1, env', store'') = matchFuncPattern ps (fromJust val) env store'
           addr = Map.lookup s env
           val = Map.lookup (fromJust addr) store
-          store'' = updateStore store' funcCallStack (CallStack [ (env, kon) ])
-
--- (Literal (EInt 5),fromList [("solve",1),("x",2),("y",3)],fromList [
---     (0,CallStack [(fromList [("solve",1)],[HBinOp (BinSeqOp (DefVar "y" (FuncCall "solve" (FuncParam (Literal (EInt 4)) (FuncParam (Literal (EInt 5)) FuncParamEnd))))),Done])])
---     ,(1,VFunc [(FuncParam (Var "x") (FuncParam (Var "y") FuncParamEnd),Return (Literal (EInt 5)))]),(2,VInt 4),(3,VInt 5)],[ReturnFrame,DefVarFrame "y" (fromList [("solve",1)]),Done])
 
 -- Returning from a function.
 step (Return e1, env, store, kon) = step (e1, env, store, ReturnFrame:kon)
 step (Value e1, env, store, ReturnFrame:kon)
     | length xs == 0 = error "Nothing on the CallStack, so can't return!"
-    | otherwise = step (Value e1, env', store, kon')
+    | otherwise = step (Value e1, env', store', kon')
     where (Just (CallStack xs)) = Map.lookup funcCallStack store
           (env', kon') = head xs
+          store' = Map.update (\x -> Just (CallStack (tail xs))) funcCallStack store
 
 -- Math binary operations.
 step (Op (MathOp op e1 e2), env, store, kon) = step (e1, env, store, (HBinOp $ BinMathOp op e2 env):kon)
@@ -79,6 +82,9 @@ step (Value (VInt n'), env', store, (BinOpH (BinMathOp op (Value (VInt n)) env))
                     Div -> n `div` n'
                     Exp -> n ^ n'
                     Mod -> n `mod` n'
+step (Value (VList n'), env', store, (BinOpH (BinMathOp Plus (Value (VList n)) env)):kon)
+    | getType (VList (n ++ n')) /= TConflict = step (Value $ VList (n ++ n'), env, store, kon)
+    | otherwise = typeError (Value (VList n)) (show Plus) (Value (VList n')) []
 step (Value e2, env', store, (BinOpH (BinMathOp op (Value e1) env)):kon) = typeError (Value e1) (show op) (Value e2) "Integer"
 
 -- Binary comparison operations: ==, &&, ||, <, >
@@ -147,29 +153,25 @@ patternMatch (FuncParam e1 xs) (FuncParam y ys) env store
           e = matchExprs x y env store
           (Just (env', store')) = e
 
-          matchExprs (VList []) (Literal Empty) env store = Just (env, store)
-          
-          matchExprs (VList xs) (Var s) env store = Just (env', store')
-            where (env', store') = updateEnvStore env store s (VList xs)
+matchExprs :: ExprValue -> Expr -> Environment -> Store -> Maybe (Environment, Store)
+matchExprs (VList []) (Literal Empty) env store = Just (env, store)
+matchExprs (VList xs) (Var s) env store = Just (env', store')
+    where (env', store') = updateEnvStore env store s (VList xs)
 
-          matchExprs (VList (x:xs)) (Op (Cons e1 e2)) env store
-            | e == Nothing = Nothing
-            | otherwise = matchExprs (VList xs) e2 env' store'
-            where e = matchValToExpr x e1 env store
-                  (Just (env', store')) = e
+matchExprs (VList (x:xs)) (Op (Cons e1 e2)) env store
+    | e == Nothing = Nothing
+    | otherwise = matchExprs (VList xs) e2 env' store'
+    where e = matchExprs x e1 env store
+          (Just (env', store')) = e
 
-          matchExprs val e1 env store = matchValToExpr x e1 env store
-
-            -- Match a value to a literal expression.
-          matchValToExpr e1 (Var s) env store = Just $ updateEnvStore env store s e1
-          matchValToExpr (VInt n) (Literal (EInt n')) env store
-            | n == n' = Just (env, store)
-            | otherwise = Nothing
-          matchValToExpr (VBool b) (Literal (EBool b')) env store
-            | b == b' = Just (env, store)
-            | otherwise = Nothing
-          matchValToExpr _ _ _ _ = Nothing
-
+matchExprs e1 (Var s) env store = Just $ updateEnvStore env store s e1
+matchExprs (VInt n) (Literal (EInt n')) env store
+    | n == n' = Just (env, store)
+    | otherwise = Nothing
+matchExprs (VBool b) (Literal (EBool b')) env store
+    | b == b' = Just (env, store)
+    | otherwise = Nothing
+matchExprs _ _ _ _ = Nothing
 
 -- Gets the type of a Value, returning TConflict if the Value has conflicting types.
 getType :: ExprValue -> Type

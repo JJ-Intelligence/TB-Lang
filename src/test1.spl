@@ -1,30 +1,9 @@
-func solve ([]) = 
-func solve (x:xs)
+func solve ([]) = {
+    return [];
+};
 
-solve ([1,2,3], 3);
+func solve (x:xs) = {
+    return solve (xs) + [x];
+};
 
--- x = [1,2+4];
-
--- y = {
---     if (x == [1,2]) {
---         0;
---     } else {
---         1;
---     }
--- };
-
--- if (y == 1 || x == [1,2+4]) {
---     k = 9;
--- };
-
--- l = 4 < 5 || 5 == 5;
-
--- y = x + [3]
-
--- y = 4 : 5 : 4 : x : [6, 8]; -- should work
-
--- z = [[4,5], [4]] : []; -- should work
-
--- q = [] : [[4,5]]; -- should work
-
--- v = [True] : [] : [[4,5]]; -- type error
+solve ([1,2,3])
