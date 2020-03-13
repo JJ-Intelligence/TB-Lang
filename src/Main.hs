@@ -4,7 +4,6 @@ import Evaluator
 import Lexer
 import Parser
 
-
 main :: IO ()
 main = do args <- getArgs
           case args of
