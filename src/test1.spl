@@ -1,9 +1,14 @@
-func solve ([]) = {
-    return [];
-};
+-- Challenge 1, solution 1
+-- func solve ([], bs) = return (); 
+-- func solve (x:y:as, z:bs) = {
+--     out (x:y:z:[]);
+--     solve (as, bs);
+--     return ();
+-- };
 
-func solve (x:xs) = {
-    return solve (xs) + [x];
-};
+as = [1,2,3,4];
+bs = [5,6,7,8];
 
-solve ([1,2,3]);
+out ([1,2,3]);
+
+-- solve (as,bs);
