@@ -7,7 +7,10 @@ import Data.Maybe
 import Debug.Trace
 
 -- Reserved elements of the Store.
-funcCallStack = 0
+funcCallStack = 0 -- Address of the function CallStack.
+heapStart = 1 -- Starting address of the variable/function heap (space after the reserved area).
+
+garbageSize = 4 -- Number of out-of-scope variables allowed in the heap before garbage collection kicks in.
 
 insertReserved :: Store -> Store
 insertReserved store = Map.insert funcCallStack (CallStack []) Map.empty
@@ -31,7 +34,8 @@ step (Literal Empty, env, store, kon) = step (Value $ VList [], env, store, kon)
 
 -- Sequence operation ';'.
 step (Seq e1 e2, env, store, kon) = step (e1, env, store, (HBinOp $ BinSeqOp e2):kon)
-step (Value e1, env, store, (HBinOp (BinSeqOp e2)):kon) = step (e2, env, store, kon)
+step (Value e1, env, store, (HBinOp (BinSeqOp e2)):kon) = step (e2, env, store', kon)
+    where store' = garbageCollection env store -- garbage collection
 
 -- Defining a new Function.
 step (DefVar s (Func ps e1), env, store, kon) = step (Value VNone, env', store', kon)
@@ -132,7 +136,8 @@ step s@(_, _, _, [Done]) = s
 -- No defined step for the current State.
 step (exp, env, store, kon) = error $ "ERROR evaluating expression " ++ (show exp) ++ ", no CESK step defined."
 
--- Match parameters to a function
+-- Match parameters to a function, returning the matched functions expression and the new environment and store containing the bound
+-- parameter variables. Throws an error if no function could be matched.
 matchFuncPattern :: Parameters -> ExprValue -> Environment -> Store -> (Expr, Environment, Store)
 matchFuncPattern _ (VFunc []) _ _ = error "No matching patterns for that function."
 matchFuncPattern ps (VFunc ((ps',e1):xs)) env store
@@ -142,6 +147,7 @@ matchFuncPattern ps (VFunc ((ps',e1):xs)) env store
           (Just (env', store')) = e
 
 -- Match inputted parameters (values) with function parameters (not values - e.g. cons operation)
+-- If the function parameters couldn't be matched, then return Nothing.
 patternMatch :: Parameters -> Parameters -> Environment -> Store -> Maybe (Environment, Store)
 patternMatch FuncParamEnd FuncParamEnd env store = Just (env, store)
 patternMatch FuncParamEnd _ _ _ = Nothing
@@ -153,6 +159,8 @@ patternMatch (FuncParam e1 xs) (FuncParam y ys) env store
           e = matchExprs x y env store
           (Just (env', store')) = e
 
+-- Match an ExprValue to an Expr, and return the updated Environment and Store as a Maybe type.
+-- If the expression couldn't be matched, then return Nothing.
 matchExprs :: ExprValue -> Expr -> Environment -> Store -> Maybe (Environment, Store)
 matchExprs (VList []) (Literal Empty) env store = Just (env, store)
 matchExprs (VList xs) (Var s) env store = Just (env', store')
@@ -216,7 +224,7 @@ addToEnv env store s
     | otherwise = (env, addr)
     where addr = case Map.lookup s env of 
                         Just (a) -> a
-                        Nothing -> (helper store 0)
+                        Nothing -> (helper store heapStart)
 
           helper store c
                 | Map.lookup c store == Nothing = c
@@ -236,6 +244,14 @@ updateStore store a e1
     | item == Nothing = Map.insert a e1 store
     | otherwise = Map.update (\x -> Just e1) a store
     where item = Map.lookup a store
+
+-- Calls up the bin man to collect the garbage.
+-- Filters the Store so it only contains addresses also in the Environment, and anything below the heapStart address (contians things such as the CallStack).
+-- It only collects garbage if the amount of garbage is greater than 'garbageSize'.
+garbageCollection :: Environment -> Store -> Store
+garbageCollection env store
+    | ((Map.size store) - heapStart) - (Map.size env) > garbageSize = Map.filterWithKey (\k v -> k < heapStart || k `elem` (Map.elems env)) store
+    | otherwise = store
 
 -- readInputWrapper :: Int -> Store -> (Int, Store)
 -- readInputWrapper streamI store

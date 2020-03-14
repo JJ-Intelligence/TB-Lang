@@ -6,4 +6,4 @@ func solve (x:xs) = {
     return solve (xs) + [x];
 };
 
-solve ([1,2,3])
+solve ([1,2,3]);
