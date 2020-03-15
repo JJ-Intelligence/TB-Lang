@@ -6,7 +6,8 @@ import qualified Data.Map.Strict as Map
 
 -- Environment - A mapping of functions and variables to Closures (which maps an Expression to an Environment).
 type Address = Int
-type Environment = Map.Map String Address
+data Scope = Local | Global deriving (Eq, Show)
+type Environment = Map.Map String (Address, Scope)
 type Store = Map.Map Address ExprValue
 
 -- Kontinuation - A stack containing Frames showing what to do.
@@ -89,8 +90,8 @@ instance Show ExprValue where
   show (VList []) = "[]"
   show (VList ((VList xs):ls)) = (show (VList xs)) ++ "\n" ++ (show (VList ls)) 
   show (VList xs) = filter (/='"') (helper (map (show) xs))
-    where helper [] = ""
-          helper [y] = show y
+    where helper [] = " "
+          helper [y] = (show y) ++ " "
           helper (x:y:xs) = (show x) ++ " " ++ (helper (y:xs))
   show VNone = "null"
   show (VFunc xs) = "VFunc " ++ (show xs)
