@@ -61,8 +61,8 @@ E : E ';' E                         { Seq $1 $3 }
   | if '(' E ')' B                  { If $3 $5 Nothing }
   | func var '(' P ')' '=' E        { DefVar $2 (Func $4 $7) }
   | func var '(' ')' '=' E          { DefVar $2 (Func FuncParamEnd $6) }
-  | return '(' E ')'                { Return $3 }
-  | return '('')'                   { Return (Literal ENone) }
+  | return E                        { Return $2 }
+  | return                          { Return (Literal ENone) }
   | var '(' P ')'                   { FuncCall $1 $3 }
   | var '=' E                       { DefVar $1 $3 }
   | var                             { Var $1 }
