@@ -30,11 +30,11 @@ eval (Value v, env, store, (FuncCallFrame "out" env'):kon) = do
     eval $ step (Value VNone, env', store, kon)
 
 eval (Value (VInt n), env, store, (FuncCallFrame "inp" env'):kon) = do
-    (val, store') = input n 1 store
+    (val, store') <- input n 1 store
     eval $ step (Value val, env', store', kon) 
 
 eval (Value (VInt n'), env, store, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n)) env')):kon) = do
-    (val, store') = input n n' store
+    (val, store') <- input n n' store
     eval $ step (Value val, env', store', kon)  
 
 eval s@(_, _, _, [Done]) = putStrLn $ "\n" ++(show s)
@@ -85,7 +85,7 @@ step (Value _, env, store, (FuncCallFrame "inp" env'):kon) = error "inp function
 step (FuncCall "inp" (FuncParam e1 (FuncParam e2 FuncParamEnd)), env, store, kon) = step (e1, env, store, (HBinOp (BinFuncCallFrame "inp" e2 env)):kon)
 step (Value (VInt n), env, store, (HBinOp (BinFuncCallFrame "inp" e2 env')):kon) = step (e2, env', store, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n)) env)):kon)
 step (Value _, env, store, (HBinOp (BinFuncCallFrame "inp" e2 env')):kon) = error "inp function must take an int as its first parameter."
-step s@(Value (VInt n), env', store, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n)) env)):kon) = s
+step s@(Value (VInt n), env', store, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n')) env)):kon) = s
 step (Value _, env', store, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n)) env)):kon) = error "inp function must take an int as its second parameter."
 
 -- List head function.
@@ -101,7 +101,7 @@ step (FuncCall "tail" (FuncParam v FuncParamEnd), env, store, kon) = step (v, en
 step (FuncCall "tail" _, env, store, kon) = error "tail function only takes one parameter - a list."
 step (Value (VList xs), env, store, (FuncCallFrame "tail" env'):kon)
     | length xs == 0 = (Value (VList xs), env, store, kon) -- Safe tail, because we don't hate people <3
-    | otherwise = (Value (tail xs), env, store, kon)
+    | otherwise = (Value $ VList (tail xs), env, store, kon)
 step (_, env, store, (FuncCallFrame "tail" env'):kon) = error "head function only takes one parameter - a list."
 
 -- User-defined function calls.
@@ -316,7 +316,7 @@ updateStore store a e1
 
 -- Output function. Prints a list of values to stdout.
 output :: ExprValue -> Environment -> Store -> IO ()
-output (FuncParam v FuncParamEnd) env store = putStr (show v)
+output v@(VList ls) env store = putStr (show v)
 output _ _ _ = error "Invalid arguments for 'out' function, it only takes in a List type."
 
 -- readInputWrapper :: Int -> Store -> (Int, Store)
@@ -332,6 +332,7 @@ output _ _ _ = error "Invalid arguments for 'out' function, it only takes in a L
 -- Input function. Reads in n values from a given sequence.
 -- Takes in the functions parameters, the current Environment and Store, returning an ExprValue and the updated Store (containing updated buffers (VLists))
 input :: Int -> Int -> Store -> IO (ExprValue, Store)
+input seqNo n store = return (VNone, store)
 
 -- Read n lines of input into stream buffers (a list of lists).
 readInput :: [[Int]] -> Int -> IO [[Int]]
