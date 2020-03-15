@@ -10,19 +10,36 @@ import Debug.Trace
 funcCallStack = 0 -- Address of the function CallStack.
 heapStart = 1 -- Starting address of the variable/function heap (space after the reserved area).
 
-garbageSize = 4 -- Number of out-of-scope variables allowed in the heap before garbage collection kicks in.
+-- garbageSize = 10 -- Number of out-of-scope variables allowed in the heap before garbage collection kicks in. (NOW REDUNDANT)
 
+-- Insert reserved items into the Store.
 insertReserved :: Store -> Store
 insertReserved store = Map.insert funcCallStack (CallStack []) Map.empty
 
+-- interpret :: String -> State
+-- interpret s = eval $ parse $ alexScanTokens s
 
-interpret :: String -> State
-interpret s = eval $ parse $ alexScanTokens s
+-- Start the evaluator by passing it an Expression (from the Parser).
+startEvaluator :: Expr -> IO ()
+startEvaluator e = eval $ step (e, Map.empty, insertReserved Map.empty, [Done])
 
--- Evaluation function to take an Expression (Control) and run it on the finite state machine.
-eval :: Expr -> State
-eval e = step (e, Map.empty, insertReserved Map.empty, [Done])
+-- Eval function encapsulates the step function, and handles its IO calls.
+eval :: State -> IO ()
+eval (Value v, env, store, (FuncCallFrame "out" env'):kon) = do
+    output v env' store
+    eval $ step (Value VNone, env', store, kon)
 
+eval (Value (VInt n), env, store, (FuncCallFrame "inp" env'):kon) = do
+    (val, store') = input n 1 store
+    eval $ step (Value val, env', store', kon) 
+
+eval (Value (VInt n'), env, store, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n)) env')):kon) = do
+    (val, store') = input n n' store
+    eval $ step (Value val, env', store', kon)  
+
+eval s@(_, _, _, [Done]) = putStrLn $ "\n" ++(show s)
+eval e = do
+    eval $ step e
 
 -- Step function to move from one State to another.
 step :: State -> State
@@ -31,11 +48,12 @@ step :: State -> State
 step (Literal (EInt n), env, store, kon) = step (Value $ VInt n, env, store, kon)
 step (Literal (EBool n), env, store, kon) = step (Value $ VBool n, env, store, kon)
 step (Literal Empty, env, store, kon) = step (Value $ VList [], env, store, kon)
+step (Literal ENone, env, store, kon) = step (Value VNone, env, store, kon)
 
 -- Sequence operation ';'.
 step (Seq e1 e2, env, store, kon) = step (e1, env, store, (HBinOp $ BinSeqOp e2):kon)
-step (Value e1, env, store, (HBinOp (BinSeqOp e2)):kon) = step (e2, env, store', kon)
-    where store' = garbageCollection env store -- garbage collection
+step (Value e1, env, store, (HBinOp (BinSeqOp e2)):kon) = step (e2, env, store, kon)
+    -- where store' = garbageCollection env store -- garbage collection
 
 -- Defining a new Function.
 step (DefVar s (Func ps e1), env, store, kon) = step (Value VNone, env', store', kon)
@@ -49,31 +67,57 @@ step (Value e1, env, store, (DefVarFrame s env'):kon) = step (Value VNone, env''
     where (env'', store') = updateEnvStore env' store s e1
 
 -- Accessing a variable reference.
-step (Var s, env, store, kon) 
-    | addr == Nothing = error $ "Variable " ++ s ++ " is not in the Environment (has not been defined)."
-    | val == Nothing = error $ "Variable " ++ s ++ " is not in the Store."
-    | otherwise = step (Value $ fromJust val, env, store, kon)
-    where addr = Map.lookup s env
-          val = Map.lookup (fromJust addr) store
+step (Var s, env, store, kon) = step (Value $ lookupVar s env store, env, store, kon)
 
--- Function call.
-step (FuncCall s ps, env, store, kon)
-    | addr == Nothing = error $ "Function " ++ s ++ " is not in the Environment (has not been defined)."
-    | val == Nothing = error $ "Function " ++ s ++ " is not in the Store."
-    | otherwise = step (e1, env', store'', kon)
-    where store' = updateStore store funcCallStack (CallStack [ (env, kon) ])
-          (e1, env', store'') = matchFuncPattern ps (fromJust val) env store'
-          addr = Map.lookup s env
-          val = Map.lookup (fromJust addr) store
+-- Function calls.
+-- Output function.
+step (FuncCall "out" (FuncParam v FuncParamEnd), env, store, kon) = step (v, env, store, (FuncCallFrame "out" env):kon)
+step (FuncCall "out" _, env, store, kon) = error "out function only takes one parameter - a list to be printed."
+step s@(Value v, env, store, (FuncCallFrame "out" env'):kon) = s
+
+-- Input function.
+    -- Single parameter input.
+step (FuncCall "inp" (FuncParam e1 FuncParamEnd), env, store, kon) = step (e1, env, store, (FuncCallFrame "inp" env):kon)
+step s@(Value (VInt n), env, store, (FuncCallFrame "inp" env'):kon) = s
+step (Value _, env, store, (FuncCallFrame "inp" env'):kon) = error "inp function with one parameter must take an Int."
+
+    -- Double parameter input.
+step (FuncCall "inp" (FuncParam e1 (FuncParam e2 FuncParamEnd)), env, store, kon) = step (e1, env, store, (HBinOp (BinFuncCallFrame "inp" e2 env)):kon)
+step (Value (VInt n), env, store, (HBinOp (BinFuncCallFrame "inp" e2 env')):kon) = step (e2, env', store, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n)) env)):kon)
+step (Value _, env, store, (HBinOp (BinFuncCallFrame "inp" e2 env')):kon) = error "inp function must take an int as its first parameter."
+step s@(Value (VInt n), env', store, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n)) env)):kon) = s
+step (Value _, env', store, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n)) env)):kon) = error "inp function must take an int as its second parameter."
+
+-- List head function.
+step (FuncCall "head" (FuncParam v FuncParamEnd), env, store, kon) = step (v, env, store, (FuncCallFrame "head" env):kon)
+step (FuncCall "head" _, env, store, kon) = error "head function only takes one parameter - a list."
+step (Value (VList xs), env, store, (FuncCallFrame "head" env'):kon)
+    | length xs == 0 = (Value (VList xs), env, store, kon) -- Safe head, because we don't hate people <3
+    | otherwise = (Value (head xs), env, store, kon)
+step (_, env, store, (FuncCallFrame "head" env'):kon) = error "head function only takes one parameter - a list."
+
+-- List tail function.
+step (FuncCall "tail" (FuncParam v FuncParamEnd), env, store, kon) = step (v, env, store, (FuncCallFrame "tail" env):kon)
+step (FuncCall "tail" _, env, store, kon) = error "tail function only takes one parameter - a list."
+step (Value (VList xs), env, store, (FuncCallFrame "tail" env'):kon)
+    | length xs == 0 = (Value (VList xs), env, store, kon) -- Safe tail, because we don't hate people <3
+    | otherwise = (Value (tail xs), env, store, kon)
+step (_, env, store, (FuncCallFrame "tail" env'):kon) = error "head function only takes one parameter - a list."
+
+-- User-defined function calls.
+step (FuncCall s ps, env, store, kon) = step (e1, env', store'', kon)
+    where val = lookupVar s env store
+          store' = updateStore store funcCallStack (CallStack [ (env, store, kon) ])
+          (e1, env', store'') = matchFuncPattern ps val env store'
 
 -- Returning from a function.
 step (Return e1, env, store, kon) = step (e1, env, store, ReturnFrame:kon)
 step (Value e1, env, store, ReturnFrame:kon)
     | length xs == 0 = error "Nothing on the CallStack, so can't return!"
-    | otherwise = step (Value e1, env', store', kon')
+    | otherwise = step (Value e1, env', store'', kon')
     where (Just (CallStack xs)) = Map.lookup funcCallStack store
-          (env', kon') = head xs
-          store' = Map.update (\x -> Just (CallStack (tail xs))) funcCallStack store
+          (env', store', kon') = head xs
+          store'' = foldr (\(addr, sc) acc -> Map.update (\x -> Map.lookup addr store) addr acc) store' (filter (\(_,sc) -> if (sc == Global) then True else False) (Map.elems env')) -- updates global variables with the ones passed back from the function call.
 
 -- Math binary operations.
 step (Op (MathOp op e1 e2), env, store, kon) = step (e1, env, store, (HBinOp $ BinMathOp op e2 env):kon)
@@ -142,44 +186,50 @@ matchFuncPattern :: Parameters -> ExprValue -> Environment -> Store -> (Expr, En
 matchFuncPattern _ (VFunc []) _ _ = error "No matching patterns for that function."
 matchFuncPattern ps (VFunc ((ps',e1):xs)) env store
     | e == Nothing = matchFuncPattern ps (VFunc xs) env store
-    | otherwise = (e1, env', store')
-    where e = patternMatch ps ps' env store
-          (Just (env', store')) = e
+    | otherwise = (e1, env'', store')
+    where e = patternMatch ps ps' env store []
+          (Just (env', ls, store')) = e
+          env'' = Map.filterWithKey (\k (a,sc) -> a < heapStart || sc == Global || k `elem` ls) env' -- Clear the local scope of the calling functions variables.
 
 -- Match inputted parameters (values) with function parameters (not values - e.g. cons operation)
 -- If the function parameters couldn't be matched, then return Nothing.
-patternMatch :: Parameters -> Parameters -> Environment -> Store -> Maybe (Environment, Store)
-patternMatch FuncParamEnd FuncParamEnd env store = Just (env, store)
-patternMatch FuncParamEnd _ _ _ = Nothing
-patternMatch _ FuncParamEnd _ _ = Nothing
-patternMatch (FuncParam e1 xs) (FuncParam y ys) env store
+patternMatch :: Parameters -> Parameters -> Environment -> Store -> [String] -> Maybe (Environment, [String], Store)
+patternMatch FuncParamEnd FuncParamEnd env store ls = Just (env, ls, store)
+patternMatch FuncParamEnd _ _ _ _ = Nothing
+patternMatch _ FuncParamEnd _ _ _ = Nothing
+patternMatch (FuncParam e1 xs) (FuncParam y ys) env store ls
     | e == Nothing = Nothing
-    | otherwise = patternMatch xs ys env' store'
+    | otherwise = patternMatch xs ys env' store' ls'
     where (Value x,_,_,_) = step (e1, env, store, [Done])
-          e = matchExprs x y env store
-          (Just (env', store')) = e
+          e = matchExprs x y env store ls
+          (Just (env', ls', store')) = e
 
 -- Match an ExprValue to an Expr, and return the updated Environment and Store as a Maybe type.
 -- If the expression couldn't be matched, then return Nothing.
-matchExprs :: ExprValue -> Expr -> Environment -> Store -> Maybe (Environment, Store)
-matchExprs (VList []) (Literal Empty) env store = Just (env, store)
-matchExprs (VList xs) (Var s) env store = Just (env', store')
+matchExprs :: ExprValue -> Expr -> Environment -> Store -> [String] -> Maybe (Environment, [String], Store)
+matchExprs (VList []) (Literal Empty) env store ls = Just (env, ls, store)
+
+matchExprs (VList xs) (Var s) env store ls = Just (env', s:ls, store')
     where (env', store') = updateEnvStore env store s (VList xs)
 
-matchExprs (VList (x:xs)) (Op (Cons e1 e2)) env store
+matchExprs (VList (x:xs)) (Op (Cons e1 e2)) env store ls
     | e == Nothing = Nothing
-    | otherwise = matchExprs (VList xs) e2 env' store'
-    where e = matchExprs x e1 env store
-          (Just (env', store')) = e
+    | otherwise = matchExprs (VList xs) e2 env' store' ls'
+    where e = matchExprs x e1 env store ls
+          (Just (env', ls', store')) = e
 
-matchExprs e1 (Var s) env store = Just $ updateEnvStore env store s e1
-matchExprs (VInt n) (Literal (EInt n')) env store
-    | n == n' = Just (env, store)
+matchExprs e1 (Var s) env store ls = Just (env', s:ls, store')
+    where (env', store') = updateEnvStore env store s e1
+
+matchExprs (VInt n) (Literal (EInt n')) env store ls
+    | n == n' = Just (env, ls, store)
     | otherwise = Nothing
-matchExprs (VBool b) (Literal (EBool b')) env store
-    | b == b' = Just (env, store)
+
+matchExprs (VBool b) (Literal (EBool b')) env store ls
+    | b == b' = Just (env, ls, store)
     | otherwise = Nothing
-matchExprs _ _ _ _ = Nothing
+
+matchExprs _ _ _ _ _ = Nothing
 
 -- Gets the type of a Value, returning TConflict if the Value has conflicting types.
 getType :: ExprValue -> Type
@@ -210,20 +260,31 @@ getType (VList xs)
           helper _ _ = TConflict
 
 
+-- Lookup a variable in the Environment and Store. Throw an error if it can't be found, else return its corresponding ExprValue.
+lookupVar :: String -> Environment -> Store -> ExprValue
+lookupVar s env store
+    | addr == Nothing = error $ "Value " ++ s ++ " is not in the Environment (has not been defined)."
+    | val == Nothing = error $ "Value " ++ s ++ " is not in the Store."
+    | otherwise = fromJust val
+    where addr = Map.lookup s env
+          val = Map.lookup (fst $ fromJust addr) store
+
 -- Binds a String (variable name) to an expression, updating the environment and store and returning them.
 updateEnvStore :: Environment -> Store -> String -> ExprValue -> (Environment, Store)
 updateEnvStore env store s e1 = (env', updateStore store addr e1)
     where (env', addr) = case Map.lookup s env of
-                                Just (a) -> (env, a)
+                                Just (a, _) -> (env, a)
                                 Nothing -> addToEnv env store s
 
 -- Adds a new String to the Environment, and returns a tuple of the new Environment and the created Address.
 addToEnv :: Environment -> Store -> String -> (Environment, Address)
 addToEnv env store s 
-    | Map.lookup s env == Nothing = (Map.insert s addr env, addr)
+    | Map.lookup s env == Nothing = (Map.insert s (addr, sc) env, addr)
     | otherwise = (env, addr)
-    where addr = case Map.lookup s env of 
-                        Just (a) -> a
+    where (Just (CallStack xs)) = Map.lookup funcCallStack store
+          sc = if (length xs > 0) then Local else Global
+          addr = case Map.lookup s env of 
+                        Just (a, _) -> a
                         Nothing -> (helper store heapStart)
 
           helper store c
@@ -248,10 +309,15 @@ updateStore store a e1
 -- Calls up the bin man to collect the garbage.
 -- Filters the Store so it only contains addresses also in the Environment, and anything below the heapStart address (contians things such as the CallStack).
 -- It only collects garbage if the amount of garbage is greater than 'garbageSize'.
-garbageCollection :: Environment -> Store -> Store
-garbageCollection env store
-    | ((Map.size store) - heapStart) - (Map.size env) > garbageSize = Map.filterWithKey (\k v -> k < heapStart || k `elem` (Map.elems env)) store
-    | otherwise = store
+-- garbageCollection :: Environment -> Store -> Store -- GARBAGE COLLECTION IS NOW REDUNDANT (as scope handles variable deletion)
+-- garbageCollection env store
+--     | ((Map.size store) - heapStart) - (Map.size env) > garbageSize = Map.filterWithKey (\k v -> k < heapStart || k `elem` (Map.elems env)) store
+--     | otherwise = store
+
+-- Output function. Prints a list of values to stdout.
+output :: ExprValue -> Environment -> Store -> IO ()
+output (FuncParam v FuncParamEnd) env store = putStr (show v)
+output _ _ _ = error "Invalid arguments for 'out' function, it only takes in a List type."
 
 -- readInputWrapper :: Int -> Store -> (Int, Store)
 -- readInputWrapper streamI store
@@ -263,9 +329,9 @@ garbageCollection env store
 --         newBuffer = readInput buffers 1
 --         removeVInputBuffer (VInputBuffer e) = e
 
-output :: ExprValue -> IO ()
-output v = do
-    print (show v)
+-- Input function. Reads in n values from a given sequence.
+-- Takes in the functions parameters, the current Environment and Store, returning an ExprValue and the updated Store (containing updated buffers (VLists))
+input :: Int -> Int -> Store -> IO (ExprValue, Store)
 
 -- Read n lines of input into stream buffers (a list of lists).
 readInput :: [[Int]] -> Int -> IO [[Int]]
@@ -285,13 +351,8 @@ readInput xs n = do
               helper (ys:yss) (x:xs) = (x:ys) : helper yss xs
 
 
-
-
 -- Type error between Expr e1 and Expr e2, using operator String s, which uses type String t.
 typeError :: Expr -> String -> Expr -> String -> a
 typeError e1 s e2 [] = typeError e1 s e2 "the same"
 typeError (Value e1) s (Value e2) t = error $ "\n\nType Error: '" ++ s ++ "' operator must be between " ++ t ++ " types, in " ++ (show e1) ++ " "++s++" " ++ (show e2) ++ 
                         ".\nThe type of expression 1 is " ++ (show $ getType e1) ++ ", but the type of expression 2 is " ++ (show $ getType e2) ++ ".\n"
-
-
-

@@ -6,7 +6,8 @@ import qualified Data.Map.Strict as Map
 
 -- Environment - A mapping of functions and variables to Closures (which maps an Expression to an Environment).
 type Address = Int
-type Environment = Map.Map String Address
+data Scope = Local | Global deriving (Eq, Show)
+type Environment = Map.Map String (Address, Scope)
 type Store = Map.Map Address ExprValue
 
 -- Kontinuation - A stack containing Frames showing what to do.
@@ -18,6 +19,7 @@ data BinOpFrame = BinCompOp ExprComp Expr Environment -- Frame for a binary comp
                 | BinConsOp Expr Environment
                 | BinMathOp ExprMath Expr Environment
                 | BinParameters Expr Environment
+                | BinFuncCallFrame String Expr Environment
                 deriving (Eq, Show)
 
 data TerOpFrame = TerIfOp Expr (Maybe ExprElif) Environment -- Frame for a ternary if statement operation - e.g. if [-] then e1 e2 (e2 is the else/elif)
@@ -28,6 +30,7 @@ data Frame = HBinOp BinOpFrame
            | HTerOp TerOpFrame
            | TerOpH TerOpFrame
            | DefVarFrame String Environment
+           | FuncCallFrame String Environment
            | ReturnFrame
            | Done 
            deriving (Eq, Show)
@@ -66,30 +69,35 @@ instance Show ExprElif where
 data ExprLiteral = EInt Int
                  | EBool Bool
                  | Empty
-                 deriving (Eq, Show)
+                 | ENone
+                 deriving (Eq)
 
--- instance Show ExprLiteral where
---   show (EInt n) = show n
---   show (EBool b) = show b
---   show Empty = "[]"
+instance Show ExprLiteral where
+  show (EInt n) = show n
+  show (EBool b) = show b
+  show Empty = "[]"
+  show ENone = "null"
 
 data ExprValue = VInt Int
                | VBool Bool
                | VList [ ExprValue ]
                | VNone
                | VFunc [ (Parameters, Expr) ]
-               | CallStack [ (Environment, Kon) ]
-               deriving (Eq, Show)
+               | CallStack [ (Environment, Store, Kon) ]
+               deriving (Eq)
 
--- instance Show ExprValue where
---   show (VInt n) = show n
---   show (VBool b) = show b
---   show (VList []) = "[]"
---   show (VList xs) = filter (/='"') ("[" ++ (helper (map (show) xs)) ++ "]")
---     where helper [] = ""
---           helper [y] = show y
---           helper (x:y:xs) = (show x) ++ "," ++ (helper (y:xs))
---   show VNone = "null"
+instance Show ExprValue where
+  show (VInt n) = show n
+  show (VBool b) = show b
+  show (VList []) = "[]"
+  show (VList ((VList xs):ls)) = (show (VList xs)) ++ "\n" ++ (show (VList ls)) 
+  show (VList xs) = filter (/='"') (helper (map (show) xs))
+    where helper [] = " "
+          helper [y] = (show y) ++ " "
+          helper (x:y:xs) = (show x) ++ " " ++ (helper (y:xs))
+  show VNone = "null"
+  show (VFunc xs) = "VFunc " ++ (show xs)
+  show (CallStack xs) = "CallStack " ++ (show xs)
 
 -- Binary Operation.
 data BinOp = CompOp ExprComp Expr Expr
@@ -136,12 +144,12 @@ instance Show ExprMath where
 
 data Parameters = FuncParam Expr Parameters
                 | FuncParamEnd
-                deriving (Eq, Show)
+                deriving (Eq)
 
--- instance Show Parameters where
---   show (FuncParam e1 FuncParamEnd) = show e1
---   show (FuncParam e1 e2) = (show e1) ++ ", " ++ (show e2)
---   show (FuncParamEnd) = ""
+instance Show Parameters where
+  show (FuncParam e1 FuncParamEnd) = show e1
+  show (FuncParam e1 e2) = (show e1) ++ ", " ++ (show e2)
+  show (FuncParamEnd) = ""
 
 data Expr = If Expr Expr (Maybe ExprElif)
           | Func Parameters Expr
@@ -153,17 +161,17 @@ data Expr = If Expr Expr (Maybe ExprElif)
           | DefVar String Expr
           | Var String
           | Seq Expr Expr
-          deriving (Eq, Show)
+          deriving (Eq)
 
--- instance Show Expr where
---   show (If c e1 Nothing) = "if (" ++ (show c) ++ ") {\n" ++ (show e1) ++ "\n}\n"
---   show (If c e1 (Just e2)) = "if (" ++ (show c) ++ ") {\n" ++ (show e1) ++ "\n} " ++ (show e2)
---   show (DefVar s (Func ps e1)) = "func " ++ s ++ " (" ++ (show ps) ++ ") = {\n" ++ (show e1) ++ "}\n" 
---   show (FuncCall s ps)  = s ++ "(" ++ (show ps) ++ ")"
---   show (Return e1) = "return " ++ (show e1)
---   show (Literal l) = show l
---   show (Value v) = show v
---   show (Op op) = show op
---   show (DefVar s e1) = s ++ " = " ++ (show e1)
---   show (Var s) = s
---   show (Seq e1 e2) = (show e1) ++ ";\n" ++ (show e2)
+instance Show Expr where
+  show (If c e1 Nothing) = "if (" ++ (show c) ++ ") {\n" ++ (show e1) ++ "\n}"
+  show (If c e1 (Just e2)) = "if (" ++ (show c) ++ ") {\n" ++ (show e1) ++ "\n} " ++ (show e2)
+  show (DefVar s (Func ps e1)) = "func " ++ s ++ " (" ++ (show ps) ++ ") = {\n" ++ (show e1) ++ "\n}" 
+  show (FuncCall s ps)  = s ++ "(" ++ (show ps) ++ ")"
+  show (Return e1) = "return " ++ (show e1)
+  show (Literal l) = show l
+  show (Value v) = show v
+  show (Op op) = show op
+  show (DefVar s e1) = s ++ " = " ++ (show e1)
+  show (Var s) = s
+  show (Seq e1 e2) = (show e1) ++ ";\n" ++ (show e2)
