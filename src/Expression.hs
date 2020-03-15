@@ -19,6 +19,7 @@ data BinOpFrame = BinCompOp ExprComp Expr Environment -- Frame for a binary comp
                 | BinConsOp Expr Environment
                 | BinMathOp ExprMath Expr Environment
                 | BinParameters Expr Environment
+                | BinFuncCallFrame String Expr Environment
                 deriving (Eq, Show)
 
 data TerOpFrame = TerIfOp Expr (Maybe ExprElif) Environment -- Frame for a ternary if statement operation - e.g. if [-] then e1 e2 (e2 is the else/elif)
@@ -29,6 +30,7 @@ data Frame = HBinOp BinOpFrame
            | HTerOp TerOpFrame
            | TerOpH TerOpFrame
            | DefVarFrame String Environment
+           | FuncCallFrame String Environment
            | ReturnFrame
            | Done 
            deriving (Eq, Show)
