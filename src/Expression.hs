@@ -22,8 +22,8 @@ data BinOpFrame = BinCompOp ExprComp Expr Environment -- Frame for a binary comp
                 | BinFuncCallFrame String Expr Environment
                 deriving (Eq, Show)
 
-data TerOpFrame = TerIfOp Expr (Maybe ExprElif) Environment -- Frame for a ternary if statement operation - e.g. if [-] then e1 e2 (e2 is the else/elif)
-                | TerWhileOp Expr Expr Environment -- Frame for a ternary while loop operation - e.g. while c then e1
+data TerOpFrame = TerIfOp Expr (Maybe ExprElif) -- Frame for a ternary if statement operation - e.g. if [-] then e1 e2 (e2 is the Maybe else/elif)
+                | TerWhileOp Expr Expr -- Frame for a ternary while loop operation - e.g. while c then e1
                 deriving (Eq, Show)
 
 data Frame = HBinOp BinOpFrame
@@ -33,6 +33,7 @@ data Frame = HBinOp BinOpFrame
            | DefVarFrame String Environment
            | FuncCallFrame String Environment
            | ReturnFrame
+           | FuncBlockFrame
            | Done 
            deriving (Eq, Show)
 
@@ -163,6 +164,7 @@ data Expr = If Expr Expr (Maybe ExprElif)
           | DefVar String Expr
           | Var String
           | Seq Expr Expr
+          | FuncBlock Expr
           deriving (Eq)
 
 instance Show Expr where

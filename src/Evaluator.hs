@@ -56,18 +56,22 @@ step (Value e1, env, store, (HBinOp (BinSeqOp e2)):kon) = step (e2, env, store, 
     -- where store' = garbageCollection env store -- garbage collection
 
 -- Defining a new Function.
-step (DefVar s (Func ps e1), env, store, kon) = step (Value VNone, env', store', kon)
+step (DefVar s (Func ps e1), env, store, kon) = step (Value $ VFunc [(ps, e1)], env', store', kon)
     where (env', store') = updateEnvStore env store s (VFunc [(ps, e1)])
 
 -- Defining a new Var.
 -- Looks for the variable in the Env, and replaces it in the Store if it exists, else it creates it.
 step (DefVar s e1, env, store, kon) = step (e1, env, store, (DefVarFrame s env):kon)
-
-step (Value e1, env, store, (DefVarFrame s env'):kon) = step (Value VNone, env'', store', kon)
+step (Value e1, env, store, (DefVarFrame s env'):kon) = step (Value e1, env'', store', kon)
     where (env'', store') = updateEnvStore env' store s e1
 
 -- Accessing a variable reference.
 step (Var s, env, store, kon) = step (Value $ lookupVar s env store, env, store, kon)
+
+-- Function blocks ({ Expr }), which must have a 'return' statement.
+step (FuncBlock e1, env, store, kon) = step (e1, env, store, FuncBlockFrame:kon)
+step (Return e1, env, store, FuncBlockFrame:kon) = (e1, env, store, kon)
+step (Value e1, env, store, FuncBlockFrame:kon) = (Value VNone, env, store, kon) 
 
 -- Function calls.
 -- Output function.
@@ -92,7 +96,7 @@ step (Value _, env', store, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n)) env
 step (FuncCall "head" (FuncParam v FuncParamEnd), env, store, kon) = step (v, env, store, (FuncCallFrame "head" env):kon)
 step (FuncCall "head" _, env, store, kon) = error "head function only takes one parameter - a list."
 step (Value (VList xs), env, store, (FuncCallFrame "head" env'):kon)
-    | length xs == 0 = (Value (VList xs), env, store, kon) -- Safe head, because we don't hate people <3
+    | length xs == 0 = (Value VNone, env, store, kon) -- Safe head, because we don't hate people <3
     | otherwise = (Value (head xs), env, store, kon)
 step (_, env, store, (FuncCallFrame "head" env'):kon) = error "head function only takes one parameter - a list."
 
@@ -172,20 +176,20 @@ step (Value (VList xs), env, store, (BinOpH (BinConsOp (Value e1) env')):kon)
     | otherwise = typeError (Value e1) ":" (Value $ VList xs) []
 
 -- if-elif-else statement.
-step (If c e1 e2, env, store, kon) = step (c, env, store, (HTerOp $ TerIfOp e1 e2 env):kon)
-step (Value (VBool b), env, store, (HTerOp (TerIfOp e1 e2 env')):kon)
-    | b = step (e1, env', store, kon)
+step (If c e1 e2, env, store, kon) = step (c, env, store, (HTerOp $ TerIfOp e1 e2):kon)
+step (Value (VBool b), env, store, (HTerOp (TerIfOp e1 e2)):kon)
+    | b = step (e1, env, store, kon)
     | otherwise = step $ helper e2
-    where helper Nothing = (Value VNone, env', store, kon)
-          helper (Just (Else e)) = (e, env', store, kon)
-          helper (Just (Elif c' e1' e2')) = (If c' e1' e2', env', store, kon)
+    where helper Nothing = (Value VNone, env, store, kon)
+          helper (Just (Else e)) = (e, env, store, kon)
+          helper (Just (Elif c' e1' e2')) = (If c' e1' e2', env, store, kon)
 
 -- While loop.
-step (While c e1, env, store, kon) = step (c, env, store, (HTerOp $ TerWhileOp c e1 env):kon)
-step (Value (VBool b), env, store, (HTerOp (TerWhileOp c e1 env')):kon)
-    | b = step (e1, env', store, (TerOpH $ TerWhileOp c e1 env'):kon)
-    | otherwise = (Value VNone, env', store, kon)
-step (Value v, env, store, (TerOpH (TerWhileOp c e1 env')):kon) = step (c, env', store, (HTerOp $ TerWhileOp c e1 env'):kon)
+step (While c e1, env, store, kon) = step (c, env, store, (HTerOp $ TerWhileOp c e1):kon)
+step (Value (VBool b), env, store, (HTerOp (TerWhileOp c e1)):kon)
+    | b = step (e1, env, store, (TerOpH $ TerWhileOp c e1):kon)
+    | otherwise = (Value VNone, env, store, kon)
+step (Value v, env, store, (TerOpH (TerWhileOp c e1)):kon) = step (c, env, store, (HTerOp $ TerWhileOp c e1):kon)
 
 -- End of evaluation.
 step s@(_, _, _, [Done]) = s
@@ -223,7 +227,7 @@ matchExprs :: ExprValue -> Expr -> Environment -> Store -> [String] -> Maybe (En
 matchExprs (VList []) (Literal Empty) env store ls = Just (env, ls, store)
 
 matchExprs (VList xs) (Var s) env store ls = Just (env', s:ls, store')
-    where (env', store') = updateEnvStore env store s (VList xs)
+    where (env', store') = overrideEnvStore env store s (VList xs) Local
 
 matchExprs (VList (x:xs)) (Op (Cons e1 e2)) env store ls
     | e == Nothing = Nothing
@@ -232,7 +236,7 @@ matchExprs (VList (x:xs)) (Op (Cons e1 e2)) env store ls
           (Just (env', ls', store')) = e
 
 matchExprs e1 (Var s) env store ls = Just (env', s:ls, store')
-    where (env', store') = updateEnvStore env store s e1
+    where (env', store') = overrideEnvStore env store s e1 Local
 
 matchExprs (VInt n) (Literal (EInt n')) env store ls
     | n == n' = Just (env, ls, store)
@@ -282,6 +286,11 @@ lookupVar s env store
     where addr = Map.lookup s env
           val = Map.lookup (fst $ fromJust addr) store
 
+-- Binds a String to an expression, overriding the String address and scope if it already exists in the Environment.
+overrideEnvStore :: Environment -> Store -> String -> ExprValue -> Scope -> (Environment, Store)
+overrideEnvStore env store s e1 sc = (Map.insert s (addr, sc) env, updateStore store addr e1)
+    where addr = findNextAvailableAddr store heapStart
+
 -- Binds a String (variable name) to an expression, updating the environment and store and returning them.
 updateEnvStore :: Environment -> Store -> String -> ExprValue -> (Environment, Store)
 updateEnvStore env store s e1 = (env', updateStore store addr e1)
@@ -298,11 +307,13 @@ addToEnv env store s
           sc = if (length xs > 0) then Local else Global
           addr = case Map.lookup s env of 
                         Just (a, _) -> a
-                        Nothing -> (helper store heapStart)
+                        Nothing -> (findNextAvailableAddr store heapStart)
 
-          helper store c
-                | Map.lookup c store == Nothing = c
-                | otherwise = helper store (c+1)
+-- Find the next available free address in the Store.
+findNextAvailableAddr :: Store -> Int -> Int
+findNextAvailableAddr store c
+    | Map.lookup c store == Nothing = c
+    | otherwise = findNextAvailableAddr store (c+1)
 
 -- Updates an Address mapping in the store.
 -- If the inputted Address is not in the store, then it will be inserted.

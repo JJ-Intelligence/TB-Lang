@@ -1,14 +1,18 @@
 -- Challenge 1, solution 1
--- func solve ([], bs) = return ([]);
--- func solve (x:y:as, z:bs) = x:y:z:(solve (as, bs));
+func solve ([], bs) = return ([]);
+func solve (x:y:as, z:bs) = return (x:y:z:(solve (as, bs)));
 
--- as = [1,2,3,4];
--- bs = [5,6,7,8];
--- out (solve (as,bs));
+as = [1,2,3,4];
+bs = [5,6,7,8];
+out (solve (as,bs));
+
+out (as)
 
 
-x = 10;
-while (x>0) {
-    x = x - 1;
-    out (x);
-}
+-- x = 10;
+-- while (x > 0) {
+--     x = x - 1;
+--     out (x);
+-- }
+
+-- Having global vars in parameters will override the global vars, so create new local vars with those names.

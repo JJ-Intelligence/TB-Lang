@@ -83,7 +83,7 @@ EElif : elif '(' E ')' B EElif      { Elif $3 $5 (Just $6) }
       | else B                      { Else $2 }
 
 -- Function block.
-B : '{' E '}'                       { $2 }
+B : '{' E '}'                       { FuncBlock $2 }
   | '(' E ')'                       { $2 }
 
 -- Binary operations.
