@@ -1,9 +1,16 @@
 -- Challenge 1, solution 1
-func solve ([], bs) = return ([]);
-func solve (x:y:as, z:bs) = {
-    return x:y:z:(solve (as, bs));
-};
+-- func solve ([], bs) = return ([]);
+-- func solve (x:y:as, z:bs) = x:y:z:(solve (as, bs));
 
-as = [1,2,3,4];
-bs = [5,6,7,8];
-out (solve (as,bs));
+-- as = [1,2,3,4];
+-- bs = [5,6,7,8];
+-- out (solve (as,bs));
+
+
+x = 10;
+y = [];
+while (x>0) {
+    x = x - 1;
+    y = x:y;
+};
+out (y);

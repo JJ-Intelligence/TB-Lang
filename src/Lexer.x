@@ -17,6 +17,7 @@ tokens :-
     if                                  { \p s -> TokenIf p }
     elif                                { \p s -> TokenElif p }
     else                                { \p s -> TokenElse p }
+    while                               { \p s -> TokenWhile p }
     func                                { \p s -> TokenFuncDef p }
     return                              { \p s -> TokenReturn p }
 
@@ -56,6 +57,8 @@ tokens :-
 data Token =  TokenIf               {pos :: AlexPosn}
             | TokenElif             {pos :: AlexPosn}
             | TokenElse             {pos :: AlexPosn}
+
+            | TokenWhile            {pos :: AlexPosn}
 
             | TokenFuncDef          {pos :: AlexPosn}
             | TokenReturn           {pos :: AlexPosn}
