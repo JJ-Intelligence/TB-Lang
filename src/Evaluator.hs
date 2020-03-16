@@ -104,6 +104,11 @@ step (Value (VList xs), env, store, (FuncCallFrame "tail" env'):kon)
     | otherwise = (Value $ VList (tail xs), env, store, kon)
 step (_, env, store, (FuncCallFrame "tail" env'):kon) = error "head function only takes one parameter - a list."
 
+step (FuncCall "length" (FuncParam v FuncParamEnd), env, store, kon) = step (v, env, store, (FuncCallFrame "length" env):kon)
+step (FuncCall "length" _, env, store, kon) = error "length function only takes one parameter - a list."
+step (Value (VList xs), env, store, (FuncCallFrame "length" env'):kon) = (Value (VInt (length xs)), env, store, kon)
+step (_, env, store, (FuncCallFrame "length" env'):kon) = error "length function only takes one parameter - a list."
+
 -- User-defined function calls.
 step (FuncCall s ps, env, store, kon) = step (e1, env', store'', kon)
     where val = lookupVar s env store
@@ -316,8 +321,8 @@ updateStore store a e1
 
 -- Output function. Prints a list of values to stdout.
 output :: ExprValue -> Environment -> Store -> IO ()
-output v@(VList ls) env store = putStr (show v)
-output _ _ _ = error "Invalid arguments for 'out' function, it only takes in a List type."
+output v env store = putStr (show v)
+-- output _ _ _ = error "Invalid arguments for 'out' function, it only takes in a List type."
 
 -- readInputWrapper :: Int -> Store -> (Int, Store)
 -- readInputWrapper streamI store
