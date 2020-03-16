@@ -68,6 +68,7 @@ E : E ';' E                         { Seq $1 $3 }
   | return '(' E ')'                { Return $3 }
   | return '(' ')'                  { Return (Literal ENone) }
   | var '(' P ')'                   { FuncCall $1 $3 }
+  | var '('')'                      { FuncCall $1 FuncParamEnd }
   | var '=' E                       { DefVar $1 $3 }
   | var                             { Var $1 }
   | B                               { $1 }

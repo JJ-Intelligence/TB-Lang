@@ -198,50 +198,46 @@ matchFuncPattern :: Parameters -> ExprValue -> Environment -> Store -> (Expr, En
 matchFuncPattern _ (VFunc []) _ _ = error "No matching patterns for that function."
 matchFuncPattern ps (VFunc ((ps',e1):xs)) env store
     | e == Nothing = matchFuncPattern ps (VFunc xs) env store
-    | otherwise = (e1, env'', store')
-    where e = patternMatch ps ps' env store []
-          (Just (env', ls, store')) = e
-          env'' = Map.filterWithKey (\k (a,sc) -> a < heapStart || sc == Global || k `elem` ls) env' -- Clear the local scope of the calling functions variables.
+    | otherwise = (e1, env', store')
+    where e = patternMatch ps ps' env store
+          (Just (env', store')) = e
 
 -- Match inputted parameters (values) with function parameters (not values - e.g. cons operation)
 -- If the function parameters couldn't be matched, then return Nothing.
-patternMatch :: Parameters -> Parameters -> Environment -> Store -> [String] -> Maybe (Environment, [String], Store)
-patternMatch FuncParamEnd FuncParamEnd env store ls = Just (env, ls, store)
-patternMatch FuncParamEnd _ _ _ _ = Nothing
-patternMatch _ FuncParamEnd _ _ _ = Nothing
-patternMatch (FuncParam e1 xs) (FuncParam y ys) env store ls
+patternMatch :: Parameters -> Parameters -> Environment -> Store -> Maybe (Environment, Store)
+patternMatch FuncParamEnd FuncParamEnd env store = Just (env, store)
+patternMatch FuncParamEnd _ _ _ = Nothing
+patternMatch _ FuncParamEnd _ _ = Nothing
+patternMatch (FuncParam e1 xs) (FuncParam y ys) env store
     | e == Nothing = Nothing
-    | otherwise = patternMatch xs ys env' store' ls'
+    | otherwise = patternMatch xs ys env' store'
     where (Value x,_,_,_) = step (e1, env, store, [Done])
-          e = matchExprs x y env store ls
-          (Just (env', ls', store')) = e
+          e = matchExprs x y env store
+          (Just (env', store')) = e
 
 -- Match an ExprValue to an Expr, and return the updated Environment and Store as a Maybe type.
 -- If the expression couldn't be matched, then return Nothing.
-matchExprs :: ExprValue -> Expr -> Environment -> Store -> [String] -> Maybe (Environment, [String], Store)
-matchExprs (VList []) (Literal Empty) env store ls = Just (env, ls, store)
+matchExprs :: ExprValue -> Expr -> Environment -> Store -> Maybe (Environment, Store)
+matchExprs (VList []) (Literal Empty) env store = Just (env, store)
 
-matchExprs (VList xs) (Var s) env store ls = Just (env', s:ls, store')
-    where (env', store') = overrideEnvStore env store s (VList xs) Local
-
-matchExprs (VList (x:xs)) (Op (Cons e1 e2)) env store ls
+matchExprs (VList (x:xs)) (Op (Cons e1 e2)) env store
     | e == Nothing = Nothing
-    | otherwise = matchExprs (VList xs) e2 env' store' ls'
-    where e = matchExprs x e1 env store ls
-          (Just (env', ls', store')) = e
+    | otherwise = matchExprs (VList xs) e2 env' store'
+    where e = matchExprs x e1 env store
+          (Just (env', store')) = e
 
-matchExprs e1 (Var s) env store ls = Just (env', s:ls, store')
+matchExprs e1 (Var s) env store = Just (env', store')
     where (env', store') = overrideEnvStore env store s e1 Local
 
-matchExprs (VInt n) (Literal (EInt n')) env store ls
-    | n == n' = Just (env, ls, store)
+matchExprs (VInt n) (Literal (EInt n')) env store
+    | n == n' = Just (env, store)
     | otherwise = Nothing
 
-matchExprs (VBool b) (Literal (EBool b')) env store ls
-    | b == b' = Just (env, ls, store)
+matchExprs (VBool b) (Literal (EBool b')) env store
+    | b == b' = Just (env, store)
     | otherwise = Nothing
 
-matchExprs _ _ _ _ _ = Nothing
+matchExprs _ _ _ _ = Nothing
 
 -- Gets the type of a Value, returning TConflict if the Value has conflicting types.
 getType :: ExprValue -> Type
