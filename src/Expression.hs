@@ -23,6 +23,7 @@ data BinOpFrame = BinCompOp ExprComp Expr Environment -- Frame for a binary comp
                 deriving (Eq, Show)
 
 data TerOpFrame = TerIfOp Expr (Maybe ExprElif) Environment -- Frame for a ternary if statement operation - e.g. if [-] then e1 e2 (e2 is the else/elif)
+                | TerWhileOp Expr Expr Environment -- Frame for a ternary while loop operation - e.g. while c then e1
                 deriving (Eq, Show)
 
 data Frame = HBinOp BinOpFrame
@@ -152,6 +153,7 @@ instance Show Parameters where
   show (FuncParamEnd) = ""
 
 data Expr = If Expr Expr (Maybe ExprElif)
+          | While Expr Expr
           | Func Parameters Expr
           | Return Expr
           | FuncCall String Parameters
@@ -166,6 +168,7 @@ data Expr = If Expr Expr (Maybe ExprElif)
 instance Show Expr where
   show (If c e1 Nothing) = "if (" ++ (show c) ++ ") {\n" ++ (show e1) ++ "\n}"
   show (If c e1 (Just e2)) = "if (" ++ (show c) ++ ") {\n" ++ (show e1) ++ "\n} " ++ (show e2)
+  show (While c e1) = "while (" ++ (show c) ++ ") {\n" ++ (show e1) ++ "\n} "
   show (DefVar s (Func ps e1)) = "func " ++ s ++ " (" ++ (show ps) ++ ") = {\n" ++ (show e1) ++ "\n}" 
   show (FuncCall s ps)  = s ++ "(" ++ (show ps) ++ ")"
   show (Return e1) = "return " ++ (show e1)

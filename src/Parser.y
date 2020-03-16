@@ -12,6 +12,8 @@ import Expression
     elif   { TokenElif _ }
     else   { TokenElse _ }
 
+    while  { TokenWhile _ }
+
     func   { TokenFuncDef _ }
     return { TokenReturn _ }
 
@@ -57,12 +59,13 @@ import Expression
 
 E : E ';' E                         { Seq $1 $3 }
   | E ';'                           { $1 }
+  | while '(' E ')' B               { While $3 $5 }
   | if '(' E ')' B EElif            { If $3 $5 (Just $6) }
   | if '(' E ')' B                  { If $3 $5 Nothing }
   | func var '(' P ')' '=' E        { DefVar $2 (Func $4 $7) }
   | func var '(' ')' '=' E          { DefVar $2 (Func FuncParamEnd $6) }
-  | return E                        { Return $2 }
-  | return                          { Return (Literal ENone) }
+  | return '(' E ')'                { Return $3 }
+  | return '(' ')'                  { Return (Literal ENone) }
   | var '(' P ')'                   { FuncCall $1 $3 }
   | var '=' E                       { DefVar $1 $3 }
   | var                             { Var $1 }
