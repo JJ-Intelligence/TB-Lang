@@ -1,6 +1,7 @@
 module Expression where
 
 import qualified Data.Map.Strict as Map
+import qualified Data.IntMap.Lazy as MapL
 
 -- **CESK machine types**
 
@@ -8,7 +9,7 @@ import qualified Data.Map.Strict as Map
 type Address = Int
 data Scope = Local | Global deriving (Eq, Show)
 type Environment = Map.Map String (Address, Scope)
-type Store = Map.Map Address ExprValue
+type Store = MapL.IntMap ExprValue
 
 -- Kontinuation - A stack containing Frames showing what to do.
 type Kon = [ Frame ]
@@ -46,14 +47,14 @@ type State = (Expr, Environment, Store, Kon)
 data Type = TInt 
           | TBool 
           | TEmpty 
-          | TList Type 
+          | TList
           | TConflict deriving (Eq)
 
 instance Show Type where 
     show TInt = "Int"
     show TBool = "Boolean"
     show TEmpty = ""
-    show (TList t) = "[" ++ (show t) ++ "]" 
+    show TList = "[]" 
     show TConflict = "Conflict"
 
 -- **Expression type returned by Parser**
@@ -85,7 +86,7 @@ data ExprValue = VInt Int
                | VList [ ExprValue ]
                | VNone
                | VFunc [ (Parameters, Expr) ]
-               | CallStack [ (Environment, Store, Kon) ]
+               | CallStack [ Environment ] Environment
                deriving (Eq)
 
 instance Show ExprValue where
@@ -99,7 +100,7 @@ instance Show ExprValue where
           helper (x:y:xs) = (show x) ++ " " ++ (helper (y:xs))
   show VNone = "null"
   show (VFunc xs) = "VFunc " ++ (show xs)
-  show (CallStack xs) = "CallStack " ++ (show xs)
+  show (CallStack xs y) = "CallStack " ++ (show xs)
 
 -- Binary Operation.
 data BinOp = CompOp ExprComp Expr Expr
@@ -180,3 +181,4 @@ instance Show Expr where
   show (DefVar s e1) = s ++ " = " ++ (show e1)
   show (Var s) = s
   show (Seq e1 e2) = (show e1) ++ ";\n" ++ (show e2)
+  show (FuncBlock e1) = "{" ++ (show e1) ++ "}"

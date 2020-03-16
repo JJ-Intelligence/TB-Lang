@@ -1,19 +1,41 @@
 -- Challenge 1, solution 1
 
-func solve ([], ys) = return ([]);
-func solve (x:y:xs, z:ys) = return (x:y:z:(solve (xs, ys)));
+-- func solve ([], bs) = {5}; 
+-- func solve (x:y:as, z:bs) = {
+--     out (x:y:z:[]);
+--     solve (as, bs);
+-- };
 
-as = [1,2,3,4];
-bs = [5,6,7,8];
-solve (as,bs);
+-- as = [-1,2,3,4];
+-- bs = [5,-6,7,8];
 
-out (solve (as,bs));
-out (as)
+-- solve (as,bs);
 
--- x = 10;
--- while (x > 0) {
---     x = x - 1;
---     out (x);
--- }
+-- func solve ([], bs) = { return ([]) };
+-- func solve (x:y:as, z:bs) = { return (x:y:z:(solve (as, bs)))};
 
--- Having global vars in parameters will override the global vars, so create new local vars with those names.
+-- as = [1,2,3,4];
+-- bs = [5,6,7,8];
+
+-- out (solve (as,bs));
+-- out (as)
+
+func solve ([]) = None;
+func solve (a:as) = solve (as);
+
+x = 0;
+as = [];
+while ( x < 10000) {
+    x = x + 1;
+    as = 1:as
+};
+
+-- out (as);
+
+solve (as);
+out (9);
+
+-- Remove Scope from CallStack - so CallStack is just the Env.
+-- Whenever you enter a new CallStack
+-- Clear Local vars from Env when you enter a new function.
+-- Pattern matching vars creates a new var.

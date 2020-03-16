@@ -3,6 +3,7 @@ import Expression
 import Parser
 import Lexer
 import qualified Data.Map.Strict as Map
+import qualified Data.IntMap.Lazy as MapL
 import Data.Maybe
 import Debug.Trace
 
@@ -14,14 +15,14 @@ heapStart = 1 -- Starting address of the variable/function heap (space after the
 
 -- Insert reserved items into the Store.
 insertReserved :: Store -> Store
-insertReserved store = Map.insert funcCallStack (CallStack []) Map.empty
+insertReserved store = MapL.insert funcCallStack (CallStack [] Map.empty) store
 
 -- interpret :: String -> State
 -- interpret s = eval $ parse $ alexScanTokens s
 
 -- Start the evaluator by passing it an Expression (from the Parser).
 startEvaluator :: Expr -> IO ()
-startEvaluator e = eval $ step (e, Map.empty, insertReserved Map.empty, [Done])
+startEvaluator e = eval $ step (e, Map.empty, insertReserved MapL.empty, [Done])
 
 -- Eval function encapsulates the step function, and handles its IO calls.
 eval :: State -> IO ()
@@ -37,7 +38,7 @@ eval (Value (VInt n'), env, store, (BinOpH (BinFuncCallFrame "inp" (Value (VInt 
     (val, store') <- input n n' store
     eval $ step (Value val, env', store', kon)  
 
-eval s@(_, _, _, [Done]) = putStrLn $ "\n" ++(show s)
+eval s@(_, _, _, [Done]) = putStrLn $ "\n"-- ++(show s)
 eval e = do
     eval $ step e
 
@@ -71,7 +72,7 @@ step (Var s, env, store, kon) = step (Value $ lookupVar s env store, env, store,
 -- Function blocks ({ Expr }), which must have a 'return' statement.
 step (FuncBlock e1, env, store, kon) = step (e1, env, store, FuncBlockFrame:kon)
 step (Return e1, env, store, FuncBlockFrame:kon) = (e1, env, store, kon)
-step (Value e1, env, store, FuncBlockFrame:kon) = (Value VNone, env, store, kon) 
+step (Value e1, env, store, FuncBlockFrame:kon) = (Value VNone, env, store, kon)
 
 -- Function calls.
 -- Output function.
@@ -115,19 +116,18 @@ step (Value (VList xs), env, store, (FuncCallFrame "length" env'):kon) = (Value 
 step (_, env, store, (FuncCallFrame "length" env'):kon) = error "length function only takes one parameter - a list."
 
 -- User-defined function calls.
-step (FuncCall s ps, env, store, kon) = step (e1, env', store'', kon)
+step (FuncCall s ps, env, store, kon) = step (e1, env', store'', ReturnFrame:kon)
     where val = lookupVar s env store
-          store' = updateStore store funcCallStack (CallStack [ (env, store, kon) ])
+          store' = updateStore store funcCallStack (CallStack [ env' ] env)
           (e1, env', store'') = matchFuncPattern ps val env store'
 
 -- Returning from a function.
-step (Return e1, env, store, kon) = step (e1, env, store, ReturnFrame:kon)
 step (Value e1, env, store, ReturnFrame:kon)
-    | length xs == 0 = error "Nothing on the CallStack, so can't return!"
-    | otherwise = step (Value e1, env', store'', kon')
-    where (Just (CallStack xs)) = Map.lookup funcCallStack store
-          (env', store', kon') = head xs
-          store'' = foldr (\(addr, sc) acc -> Map.update (\x -> Map.lookup addr store) addr acc) store' (filter (\(_,sc) -> if (sc == Global) then True else False) (Map.elems env')) -- updates global variables with the ones passed back from the function call.
+    | length xs == 0 = step (Value e1, y, store, kon)
+    | otherwise = step (Value e1, env', store, kon)
+    where (Just (CallStack xs y)) = MapL.lookup funcCallStack store
+          env' = head xs
+
 
 -- Math binary operations.
 step (Op (MathOp op e1 e2), env, store, kon) = step (e1, env, store, (HBinOp $ BinMathOp op e2 env):kon)
@@ -168,12 +168,7 @@ step (Value e2, env', store, (BinOpH (BinCompOp Equality (Value e1) env)):kon)
 -- Cons binary operation.
 step (Op (Cons e1 e2), env, store, kon) = step (e1, env, store, (HBinOp $ BinConsOp e2 env):kon)
 step (Value e1, env, store, (HBinOp (BinConsOp e2 env')):kon) = step (e2, env', store, (BinOpH (BinConsOp (Value e1) env')):kon)
-
-step (Value (VList []), env, store, (BinOpH (BinConsOp (Value e1) env')):kon) = step (Value $ VList [e1], env', store, kon) -- Don't think we need this line
-
-step (Value (VList xs), env, store, (BinOpH (BinConsOp (Value e1) env')):kon)
-    | getType (VList (e1:xs)) /= TConflict = step (Value (VList (e1:xs)), env', store, kon)
-    | otherwise = typeError (Value e1) ":" (Value $ VList xs) []
+step (Value (VList xs), env, store, (BinOpH (BinConsOp (Value e1) env')):kon) = step (Value (VList (e1:xs)), env', store, kon)
 
 -- if-elif-else statement.
 step (If c e1 e2, env, store, kon) = step (c, env, store, (HTerOp $ TerIfOp e1 e2):kon)
@@ -195,7 +190,7 @@ step (Value v, env, store, (TerOpH (TerWhileOp c e1)):kon) = step (c, env, store
 step s@(_, _, _, [Done]) = s
 
 -- No defined step for the current State.
-step (exp, env, store, kon) = error $ "ERROR evaluating expression " ++ (show exp) ++ ", no CESK step defined."
+step s@(exp, env, store, kon) = error $ "ERROR evaluating expression " ++ (show s) ++ ", no CESK step defined."
 
 -- Match parameters to a function, returning the matched functions expression and the new environment and store containing the bound
 -- parameter variables. Throws an error if no function could be matched.
@@ -252,30 +247,7 @@ matchExprs _ _ _ _ _ = Nothing
 getType :: ExprValue -> Type
 getType (VInt _) = TInt
 getType (VBool _) = TBool
-getType (VList []) = TList TEmpty
-getType (VList xs)
-    | length m == 0 = TList TEmpty
-    | length m == 1 = if (head m) == TConflict then TConflict else TList $ head m
-    | r == TConflict = TConflict
-    | otherwise = TList r
-    where m = map (getType) xs
-          r = helper (tail m) (head m)
-          helper [] t = t
-          helper (TInt:xs) TInt = helper xs TInt
-          helper (TInt:xs) TEmpty = helper xs TInt
-          helper (TBool:xs) TBool = helper xs TBool
-          helper (TBool:xs) TEmpty = helper xs TBool
-          helper (TEmpty:xs) acc = helper xs acc
-          helper e@((TList x):xs) (TList y)
-              | r' == TConflict = TConflict
-              | otherwise = TList r'
-              where r' = helper (helper' e) y
-                    helper' [] = []
-                    helper' (TEmpty:xs) = xs
-                    helper' ((TList x):xs) = x : helper' xs
-                    helper' _ = [TConflict]
-          helper _ _ = TConflict
-
+getType (VList _) = TList
 
 -- Lookup a variable in the Environment and Store. Throw an error if it can't be found, else return its corresponding ExprValue.
 lookupVar :: String -> Environment -> Store -> ExprValue
@@ -284,7 +256,7 @@ lookupVar s env store
     | val == Nothing = error $ "Value " ++ s ++ " is not in the Store."
     | otherwise = fromJust val
     where addr = Map.lookup s env
-          val = Map.lookup (fst $ fromJust addr) store
+          val = MapL.lookup (fst $ fromJust addr) store
 
 -- Binds a String to an expression, overriding the String address and scope if it already exists in the Environment.
 overrideEnvStore :: Environment -> Store -> String -> ExprValue -> Scope -> (Environment, Store)
@@ -299,11 +271,10 @@ updateEnvStore env store s e1 = (env', updateStore store addr e1)
                                 Nothing -> addToEnv env store s
 
 -- Adds a new String to the Environment, and returns a tuple of the new Environment and the created Address.
+-- Assumes the String is not in the Environment.
 addToEnv :: Environment -> Store -> String -> (Environment, Address)
-addToEnv env store s 
-    | Map.lookup s env == Nothing = (Map.insert s (addr, sc) env, addr)
-    | otherwise = (env, addr)
-    where (Just (CallStack xs)) = Map.lookup funcCallStack store
+addToEnv env store s = (Map.insert s (addr, sc) env, addr)
+    where (Just (CallStack xs y)) = MapL.lookup funcCallStack store
           sc = if (length xs > 0) then Local else Global
           addr = case Map.lookup s env of 
                         Just (a, _) -> a
@@ -312,23 +283,24 @@ addToEnv env store s
 -- Find the next available free address in the Store.
 findNextAvailableAddr :: Store -> Int -> Int
 findNextAvailableAddr store c
-    | Map.lookup c store == Nothing = c
+    | MapL.lookup c store == Nothing = c
     | otherwise = findNextAvailableAddr store (c+1)
 
 -- Updates an Address mapping in the store.
 -- If the inputted Address is not in the store, then it will be inserted.
 updateStore :: Store -> Address -> ExprValue -> Store
-updateStore store a e@(CallStack xs) = Map.update (\x -> Just (CallStack (xs ++ ys))) a store
-    where (Just (CallStack ys)) = Map.lookup a store
+updateStore store a e@(CallStack xs y) = MapL.update (\x -> Just (CallStack (xs ++ ys) globalEnv)) a store
+    where (Just (CallStack ys y')) = MapL.lookup a store
+          globalEnv = if (y' == Map.empty) then y else y'
 updateStore store a e@(VFunc xs)
-    | (Map.lookup a store) == Nothing = Map.insert a e store
-    | otherwise = Map.update (\x -> Just (VFunc (ys ++ xs))) a store
-    where (Just (VFunc ys)) = Map.lookup a store
+    | (MapL.lookup a store) == Nothing = MapL.insert a e store
+    | otherwise = MapL.update (\x -> Just (VFunc (ys ++ xs))) a store
+    where (Just (VFunc ys)) = MapL.lookup a store
 
 updateStore store a e1
-    | item == Nothing = Map.insert a e1 store
-    | otherwise = Map.update (\x -> Just e1) a store
-    where item = Map.lookup a store
+    | item == Nothing = MapL.insert a e1 store
+    | otherwise = MapL.update (\x -> Just e1) a store
+    where item = MapL.lookup a store
 
 -- Calls up the bin man to collect the garbage.
 -- Filters the Store so it only contains addresses also in the Environment, and anything below the heapStart address (contians things such as the CallStack).

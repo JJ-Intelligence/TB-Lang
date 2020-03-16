@@ -47,6 +47,7 @@ tokens :-
     $digit+                             { \p s -> TokenInt (read s) p }
     True                                { \p s -> TokenBool True p }
     False                               { \p s -> TokenBool False p }
+    None                                { \p _ -> TokenNone p }
 
     [$alpha \_] [$alpha $digit \_]*     { \p s -> TokenVar s p }
 
@@ -88,6 +89,7 @@ data Token =  TokenIf               {pos :: AlexPosn}
 
             | TokenInt              {int :: Int, pos :: AlexPosn}
             | TokenBool             {bool :: Bool, pos :: AlexPosn}
+            | TokenNone             {pos :: AlexPosn}
 
             | TokenVar              {name :: String, pos :: AlexPosn} 
             deriving (Eq) 
@@ -97,6 +99,8 @@ instance Show Token where
     show (TokenIf _) = "if "
     show (TokenElif _) = "elif "
     show (TokenElse _) = "else "
+
+    show (TokenWhile _) = "while "
 
     show (TokenFuncDef _) = "func "
     show (TokenReturn _) = "return "
@@ -126,6 +130,7 @@ instance Show Token where
 
     show (TokenInt n _) = (show n) ++ " "
     show (TokenBool b _) = (show b) ++ " "
+    show (TokenNone _) = "None "
 
     show (TokenVar s _) = s ++ " "
 

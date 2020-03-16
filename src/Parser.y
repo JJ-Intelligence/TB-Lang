@@ -42,6 +42,7 @@ import Expression
 
     int    { TokenInt $$ _ }
     bool   { TokenBool $$ _ }
+    none   { TokenNone _ }
 
     var    { TokenVar $$ _ }
 
@@ -111,6 +112,7 @@ C2 : E ',' C2                       { Op (Cons $1 $3) }
 L : '-'int %prec NEG                { Literal (EInt (-$2)) }
   | int                             { Literal (EInt $1) }
   | bool                            { Literal (EBool $1) }
+  | none                            { Literal ENone }
 
 {
 
