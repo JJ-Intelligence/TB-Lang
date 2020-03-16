@@ -29,13 +29,13 @@ eval (Value v, env, store, (FuncCallFrame "out" env'):kon) = do
     output v env' store
     eval $ step (Value VNone, env', store, kon)
 
--- eval (Value (VInt n), env, store, (FuncCallFrame "inp" env'):kon) = do
---     (val, store') = input n 1 store
---     eval $ step (Value val, env', store', kon)
+eval (Value (VInt n), env, store, (FuncCallFrame "inp" env'):kon) = do
+    (val, store') <- input n 1 store
+    eval $ step (Value val, env', store', kon) 
 
--- eval (Value (VInt n'), env, store, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n)) env')):kon) = do
---     (val, store') = input n n' store
---     eval $ step (Value val, env', store', kon)
+eval (Value (VInt n'), env, store, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n)) env')):kon) = do
+    (val, store') <- input n n' store
+    eval $ step (Value val, env', store', kon)  
 
 eval s@(_, _, _, [Done]) = putStrLn $ "\n" ++(show s)
 eval e = do
@@ -101,7 +101,7 @@ step (FuncCall "tail" (FuncParam v FuncParamEnd), env, store, kon) = step (v, en
 step (FuncCall "tail" _, env, store, kon) = error "tail function only takes one parameter - a list."
 step (Value (VList xs), env, store, (FuncCallFrame "tail" env'):kon)
     | length xs == 0 = (Value (VList xs), env, store, kon) -- Safe tail, because we don't hate people <3
-    | otherwise = (Value (VList (tail xs)), env, store, kon)
+    | otherwise = (Value $ VList (tail xs), env, store, kon)
 step (_, env, store, (FuncCallFrame "tail" env'):kon) = error "head function only takes one parameter - a list."
 
 step (FuncCall "length" (FuncParam v FuncParamEnd), env, store, kon) = step (v, env, store, (FuncCallFrame "length" env):kon)
@@ -336,7 +336,8 @@ output v env store = putStr (show v)
 
 -- Input function. Reads in n values from a given sequence.
 -- Takes in the functions parameters, the current Environment and Store, returning an ExprValue and the updated Store (containing updated buffers (VLists))
--- input :: Int -> Int -> Store -> IO (ExprValue, Store)
+input :: Int -> Int -> Store -> IO (ExprValue, Store)
+input seqNo n store = return (VNone, store)
 
 -- Read n lines of input into stream buffers (a list of lists).
 readInput :: [[Int]] -> Int -> IO [[Int]]
