@@ -104,9 +104,10 @@ step (Value (VList xs), env, store, (FuncCallFrame "tail" env'):kon)
     | otherwise = (Value $ VList (tail xs), env, store, kon)
 step (_, env, store, (FuncCallFrame "tail" env'):kon) = error "head function only takes one parameter - a list."
 
+-- List length function
 step (FuncCall "length" (FuncParam v FuncParamEnd), env, store, kon) = step (v, env, store, (FuncCallFrame "length" env):kon)
 step (FuncCall "length" _, env, store, kon) = error "length function only takes one parameter - a list."
-step (Value (VList xs), env, store, (FuncCallFrame "length" env'):kon) = (Value (VInt (length xs)), env, store, kon)
+step (Value (VList xs), env, store, (FuncCallFrame "length" env'):kon) = (Value (VInt (length xs)), env', store, kon)
 step (_, env, store, (FuncCallFrame "length" env'):kon) = error "length function only takes one parameter - a list."
 
 -- User-defined function calls.
@@ -179,11 +180,12 @@ step (Value (VBool b), env, store, (HTerOp (TerIfOp e1 e2 env')):kon)
           helper (Just (Else e)) = (e, env', store, kon)
           helper (Just (Elif c' e1' e2')) = (If c' e1' e2', env', store, kon)
 
+-- While loop.
 step (While c e1, env, store, kon) = step (c, env, store, (HTerOp $ TerWhileOp c e1 env):kon)
 step (Value (VBool b), env, store, (HTerOp (TerWhileOp c e1 env')):kon)
-    | b = step (c, env, store2, (HTerOp (TerWhileOp c e1 env')):kon)
-    | otherwise = (Value (VNone), env', store, kon)
-    where (e2, env2, store2, _) = step (e1, env', store, kon)
+    | b = step (e1, env', store, (TerOpH $ TerWhileOp c e1 env'):kon)
+    | otherwise = (Value VNone, env', store, kon)
+step (Value v, env, store, (TerOpH (TerWhileOp c e1 env')):kon) = step (c, env', store, (HTerOp $ TerWhileOp c e1 env'):kon)
 
 -- End of evaluation.
 step s@(_, _, _, [Done]) = s
