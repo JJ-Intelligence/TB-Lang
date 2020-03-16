@@ -163,6 +163,7 @@ data Expr = If Expr Expr (Maybe ExprElif)
           | DefVar String Expr
           | Var String
           | Seq Expr Expr
+          | FuncBlock Expr
           deriving (Eq)
 
 instance Show Expr where
