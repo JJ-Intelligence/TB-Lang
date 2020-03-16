@@ -183,9 +183,7 @@ step (While c e1, env, store, kon) = step (c, env, store, (HTerOp $ TerWhileOp c
 step (Value (VBool b), env, store, (HTerOp (TerWhileOp c e1 env')):kon)
     | b = step (c, env, store2, (HTerOp (TerWhileOp c e1 env')):kon)
     | otherwise = (Value (VNone), env', store, kon)
-    where (e2, env2, store2, _) = step (e1, env, store, [])
-
-step (Value e, env, store, kon) = (Value e, env, store, kon)
+    where (e2, env2, store2, _) = step (e1, env', store, kon)
 
 -- End of evaluation.
 step s@(_, _, _, [Done]) = s
