@@ -83,10 +83,11 @@ instance Show ExprLiteral where
 
 data ExprValue = VInt Int
                | VBool Bool
+               | VVar String
                | VList [ ExprValue ]
                | VNone
-               | VFunc [ (Parameters, Expr) ]
-               | CallStack [ Environment ] Environment
+               | VFunc [ ([ExprValue], Expr) ]
+               | GlobalEnv Environment
                deriving (Eq)
 
 instance Show ExprValue where
@@ -100,7 +101,8 @@ instance Show ExprValue where
           helper (x:y:xs) = (show x) ++ " " ++ (helper (y:xs))
   show VNone = "null"
   show (VFunc xs) = "VFunc " ++ (show xs)
-  show (CallStack xs y) = "CallStack " ++ (show xs)
+  show (GlobalEnv env) = "GlobalEnv " ++ (show env)
+  show (VVar s) = "Var " ++ s
 
 -- Binary Operation.
 data BinOp = CompOp ExprComp Expr Expr

@@ -15,7 +15,7 @@ heapStart = 1 -- Starting address of the variable/function heap (space after the
 
 -- Insert reserved items into the Store.
 insertReserved :: Store -> Store
-insertReserved store = MapL.insert funcCallStack (CallStack [] Map.empty) store
+insertReserved store = MapL.insert funcCallStack (GlobalEnv Map.empty) store
 
 -- interpret :: String -> State
 -- interpret s = eval $ parse $ alexScanTokens s
@@ -57,8 +57,22 @@ step (Value e1, env, store, (HBinOp (BinSeqOp e2)):kon) = step (e2, env, store, 
     -- where store' = garbageCollection env store -- garbage collection
 
 -- Defining a new Function.
-step (DefVar s (Func ps e1), env, store, kon) = step (Value $ VFunc [(ps, e1)], env', store', kon)
-    where (env', store') = updateEnvStore env store s (VFunc [(ps, e1)])
+step (DefVar s (Func ps e1), env, store, kon) = step (Value funcVal, env', store', kon)
+    where funcVal = VFunc [(evaluateParams ps, e1)]
+          (env', store') = updateEnvStore env store s (funcVal)
+
+          evaluateParams FuncParamEnd = []
+          evaluateParams (FuncParam (Op (Cons e1 e2)) e3) = VList (helper' $ Op (Cons e1 e2)) : evaluateParams e3
+                where helper' (Op (Cons e1 e2)) = helper e1 : helper' e2
+                      helper' e2 = [helper e2]
+
+          evaluateParams (FuncParam e1 e2) = helper e1 : evaluateParams e2
+          
+          helper (Literal (EInt n)) = (VInt n)
+          helper (Literal (EBool b)) = (VBool b)
+          helper (Literal Empty) = (VList [])
+          helper (Var s) = (VVar s)
+
 
 -- Defining a new Var.
 -- Looks for the variable in the Env, and replaces it in the Store if it exists, else it creates it.
@@ -71,8 +85,8 @@ step (Var s, env, store, kon) = step (Value $ lookupVar s env store, env, store,
 
 -- Function blocks ({ Expr }), which must have a 'return' statement.
 step (FuncBlock e1, env, store, kon) = step (e1, env, store, FuncBlockFrame:kon)
-step (Return e1, env, store, FuncBlockFrame:kon) = (e1, env, store, kon)
-step (Value e1, env, store, FuncBlockFrame:kon) = (Value VNone, env, store, kon)
+step (Return e1, env, store, FuncBlockFrame:kon) = step (e1, env, store, kon)
+step (Value e1, env, store, FuncBlockFrame:kon) = step (Value VNone, env, store, kon)
 
 -- Function calls.
 -- Output function.
@@ -107,7 +121,7 @@ step (FuncCall "tail" _, env, store, kon) = error "tail function only takes one 
 step (Value (VList xs), env, store, (FuncCallFrame "tail" env'):kon)
     | length xs == 0 = (Value (VList xs), env, store, kon) -- Safe tail, because we don't hate people <3
     | otherwise = (Value $ VList (tail xs), env, store, kon)
-step (_, env, store, (FuncCallFrame "tail" env'):kon) = error "head function only takes one parameter - a list."
+step (_, env, store, (FuncCallFrame "tail" env'):kon) = error "tail function only takes one parameter - a list."
 
 -- List length function
 step (FuncCall "length" (FuncParam v FuncParamEnd), env, store, kon) = step (v, env, store, (FuncCallFrame "length" env):kon)
@@ -116,18 +130,12 @@ step (Value (VList xs), env, store, (FuncCallFrame "length" env'):kon) = (Value 
 step (_, env, store, (FuncCallFrame "length" env'):kon) = error "length function only takes one parameter - a list."
 
 -- User-defined function calls.
-step (FuncCall s ps, env, store, kon) = step (e1, env', store'', ReturnFrame:kon)
-    where val = lookupVar s env store
-          store' = updateStore store funcCallStack (CallStack [ env' ] env)
-          (e1, env', store'') = matchFuncPattern ps val env store'
+step (FuncCall s ps, env, store, kon) = step (Value e2, env, store', kon) -- Continue after function call returns.
+    where (e1, env', store') = handleFuncArgs ps env store s -- Pattern match
+          (Value e2, _, store'', _) = step (e1, env', store', ReturnFrame:kon) -- Recurse into function call.
 
 -- Returning from a function.
-step (Value e1, env, store, ReturnFrame:kon)
-    | length xs == 0 = step (Value e1, y, store, kon)
-    | otherwise = step (Value e1, env', store, kon)
-    where (Just (CallStack xs y)) = MapL.lookup funcCallStack store
-          env' = head xs
-
+step (Value e1, env, store, ReturnFrame:kon) = (Value e1, env, store, kon)
 
 -- Math binary operations.
 step (Op (MathOp op e1 e2), env, store, kon) = step (e1, env, store, (HBinOp $ BinMathOp op e2 env):kon)
@@ -192,52 +200,93 @@ step s@(_, _, _, [Done]) = s
 -- No defined step for the current State.
 step s@(exp, env, store, kon) = error $ "ERROR evaluating expression " ++ (show s) ++ ", no CESK step defined."
 
+handleFuncArgs :: Parameters -> Environment -> Store -> String -> (Expr, Environment, Store) -- Tested: method is slowing down the CESK!
+handleFuncArgs args env store s = (e1, env', store'')
+    where (env', store'') = foldr (\(s, e2) (accEnv, accStore) -> (overrideEnvStore accEnv accStore s e2 Local)) (globalEnv, store') xs
+          (e1, xs) = matchArgsToFunc args' (lookupVar s env store)
+          args' = evaluateArgs args env store
+          (globalEnv, store') = let (Just (GlobalEnv e)) = MapL.lookup funcCallStack store in 
+                                 if (e == Map.empty) then (env, MapL.update (\x -> Just $ GlobalEnv env) funcCallStack store) else (e, store) -- update Global Env
+
+          evaluateArgs FuncParamEnd env store = []
+          evaluateArgs (FuncParam e1 e2) env store = e1' : evaluateArgs e2 env store
+                where (Value e1',_,_,_) = step (e1, env, store, [Done])
+
+-- Take in function call paramaters, env and store for the function call, function value in the store, global environment.
+-- At this stage, parameters should be fully evaluated.
+-- VFunc [ ([ExprValue], Expr) ]
+-- args:           (as, k, bs) => [VList [VInt 1, VInt 2, VInt 3, VInt 4, VInt 5], VInt 4, VList []]
+-- parameters: (x:y:zs, 4, []) => [VList [VVar x, VVar y, VVar zs], VInt 4, VList []] 
+-- Match x = VInt 1, y = VInt 2, zs = VList [VInt 3, VInt 4, VInt 5].
+-- Verify VInt 4 == VInt 4, VList [] == VList []
+matchArgsToFunc :: [ExprValue] -> ExprValue -> (Expr, [(String, ExprValue)]) -- Tested: method not slowing down the CESK!
+matchArgsToFunc _ (VFunc []) = error "No matching patterns for that function."
+matchArgsToFunc args (VFunc ((ps,e1):xs))
+    | length args /= length ps  || ys == Nothing = matchArgsToFunc args (VFunc xs)
+    | otherwise = (e1, fromJust ys)
+    where ys = foldr (\(p, a) acc -> let e = (matchParamToArg p a []) in 
+                                        if (acc == Nothing || e == Nothing) then Nothing else Just $ (fromJust e) ++ (fromJust acc)) (Just []) (zip ps args)
+
+          matchParamToArg (VList []) (VList []) ls = Just ls
+          matchParamToArg (VList [VVar s]) (VList ys) ls = matchParamToArg (VVar s) (VList ys) ls
+
+          matchParamToArg (VList (x:xs)) (VList (y:ys)) ls
+                | e == Nothing = Nothing
+                | otherwise = matchParamToArg (VList xs) (VList ys) (fromJust e)
+                where e = matchParamToArg x y ls
+
+          matchParamToArg (VVar s) e2 ls = Just ((s, e2):ls)
+          matchParamToArg (VInt n) (VInt n') ls = if n == n' then Just ls else Nothing
+          matchParamToArg (VBool b) (VBool b') ls = if b == b' then Just ls else Nothing
+          matchParamToArg _ _ _ = Nothing
+
+
 -- Match parameters to a function, returning the matched functions expression and the new environment and store containing the bound
 -- parameter variables. Throws an error if no function could be matched.
-matchFuncPattern :: Parameters -> ExprValue -> Environment -> Store -> (Expr, Environment, Store)
-matchFuncPattern _ (VFunc []) _ _ = error "No matching patterns for that function."
-matchFuncPattern ps (VFunc ((ps',e1):xs)) env store
-    | e == Nothing = matchFuncPattern ps (VFunc xs) env store
-    | otherwise = (e1, env', store')
-    where e = patternMatch ps ps' env store
-          (Just (env', store')) = e
+-- matchFuncPattern :: Parameters -> ExprValue -> Environment -> Store -> (Expr, Environment, Store)
+-- matchFuncPattern _ (VFunc []) _ _ = error "No matching patterns for that function."
+-- matchFuncPattern ps (VFunc ((ps',e1):xs)) env store
+--     | e == Nothing = matchFuncPattern ps (VFunc xs) env store
+--     | otherwise = (e1, env', store')
+--     where e = patternMatch ps ps' env store
+--           (Just (env', store')) = e
 
--- Match inputted parameters (values) with function parameters (not values - e.g. cons operation)
--- If the function parameters couldn't be matched, then return Nothing.
-patternMatch :: Parameters -> Parameters -> Environment -> Store -> Maybe (Environment, Store)
-patternMatch FuncParamEnd FuncParamEnd env store = Just (env, store)
-patternMatch FuncParamEnd _ _ _ = Nothing
-patternMatch _ FuncParamEnd _ _ = Nothing
-patternMatch (FuncParam e1 xs) (FuncParam y ys) env store
-    | e == Nothing = Nothing
-    | otherwise = patternMatch xs ys env' store'
-    where (Value x,_,_,_) = step (e1, env, store, [Done])
-          e = matchExprs x y env store
-          (Just (env', store')) = e
+-- -- Match inputted parameters (values) with function parameters (not values - e.g. cons operation)
+-- -- If the function parameters couldn't be matched, then return Nothing.
+-- patternMatch :: Parameters -> Parameters -> Environment -> Store -> Maybe (Environment, Store)
+-- patternMatch FuncParamEnd FuncParamEnd env store = Just (env, store)
+-- patternMatch FuncParamEnd _ _ _ = Nothing
+-- patternMatch _ FuncParamEnd _ _ = Nothing
+-- patternMatch (FuncParam e1 xs) (FuncParam y ys) env store
+--     | e == Nothing = Nothing
+--     | otherwise = patternMatch xs ys env' store'
+--     where (Value x,_,_,_) = step (e1, env, store, [Done])
+--           e = matchExprs x y env store
+--           (Just (env', store')) = e
 
--- Match an ExprValue to an Expr, and return the updated Environment and Store as a Maybe type.
--- If the expression couldn't be matched, then return Nothing.
-matchExprs :: ExprValue -> Expr -> Environment -> Store -> Maybe (Environment, Store)
-matchExprs (VList []) (Literal Empty) env store = Just (env, store)
+-- -- Match an ExprValue to an Expr, and return the updated Environment and Store as a Maybe type.
+-- -- If the expression couldn't be matched, then return Nothing.
+-- matchExprs :: ExprValue -> Expr -> Environment -> Store -> Maybe (Environment, Store)
+-- matchExprs (VList []) (Literal Empty) env store = Just (env, store)
 
-matchExprs (VList (x:xs)) (Op (Cons e1 e2)) env store
-    | e == Nothing = Nothing
-    | otherwise = matchExprs (VList xs) e2 env' store'
-    where e = matchExprs x e1 env store
-          (Just (env', store')) = e
+-- matchExprs (VList (x:xs)) (Op (Cons e1 e2)) env store
+--     | e == Nothing = Nothing
+--     | otherwise = matchExprs (VList xs) e2 env' store'
+--     where e = matchExprs x e1 env store
+--           (Just (env', store')) = e
 
-matchExprs e1 (Var s) env store = Just (env', store')
-    where (env', store') = overrideEnvStore env store s e1 Local
+-- matchExprs e1 (Var s) env store = Just (env', store')
+--     where (env', store') = overrideEnvStore env store s e1 Local
 
-matchExprs (VInt n) (Literal (EInt n')) env store
-    | n == n' = Just (env, store)
-    | otherwise = Nothing
+-- matchExprs (VInt n) (Literal (EInt n')) env store
+--     | n == n' = Just (env, store)
+--     | otherwise = Nothing
 
-matchExprs (VBool b) (Literal (EBool b')) env store
-    | b == b' = Just (env, store)
-    | otherwise = Nothing
+-- matchExprs (VBool b) (Literal (EBool b')) env store
+--     | b == b' = Just (env, store)
+--     | otherwise = Nothing
 
-matchExprs _ _ _ _ = Nothing
+-- matchExprs _ _ _ _ = Nothing
 
 -- Gets the type of a Value, returning TConflict if the Value has conflicting types.
 getType :: ExprValue -> Type
@@ -248,8 +297,8 @@ getType (VList _) = TList
 -- Lookup a variable in the Environment and Store. Throw an error if it can't be found, else return its corresponding ExprValue.
 lookupVar :: String -> Environment -> Store -> ExprValue
 lookupVar s env store
-    | addr == Nothing = error $ "Value " ++ s ++ " is not in the Environment (has not been defined)."
-    | val == Nothing = error $ "Value " ++ s ++ " is not in the Store."
+    | addr == Nothing = error $ "Value " ++ s ++ " is not in the Environment (has not been defined) -> " ++ (show env)
+    | val == Nothing = error $ "Value " ++ s ++ " is not in the Store -> " ++ (show store)
     | otherwise = fromJust val
     where addr = Map.lookup s env
           val = MapL.lookup (fst $ fromJust addr) store
@@ -270,8 +319,7 @@ updateEnvStore env store s e1 = (env', updateStore store addr e1)
 -- Assumes the String is not in the Environment.
 addToEnv :: Environment -> Store -> String -> (Environment, Address)
 addToEnv env store s = (Map.insert s (addr, sc) env, addr)
-    where (Just (CallStack xs y)) = MapL.lookup funcCallStack store
-          sc = if (length xs > 0) then Local else Global
+    where sc = Global
           addr = case Map.lookup s env of 
                         Just (a, _) -> a
                         Nothing -> (findNextAvailableAddr store heapStart)
@@ -285,9 +333,6 @@ findNextAvailableAddr store c
 -- Updates an Address mapping in the store.
 -- If the inputted Address is not in the store, then it will be inserted.
 updateStore :: Store -> Address -> ExprValue -> Store
-updateStore store a e@(CallStack xs y) = MapL.update (\x -> Just (CallStack (xs ++ ys) globalEnv)) a store
-    where (Just (CallStack ys y')) = MapL.lookup a store
-          globalEnv = if (y' == Map.empty) then y else y'
 updateStore store a e@(VFunc xs)
     | (MapL.lookup a store) == Nothing = MapL.insert a e store
     | otherwise = MapL.update (\x -> Just (VFunc (ys ++ xs))) a store
