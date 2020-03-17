@@ -1,46 +1,24 @@
 -- Challenge 1, solution 1
+func solve ([], bs) = []; 
+func solve (a:[], bs) = []; 
+func solve (x:y:as, z:bs) = x : y : z : solve (as, bs);
 
--- func solve ([], bs) = {5}; 
--- func solve (x:y:as, z:bs) = {
---     out (x:y:z:[]);
---     solve (as, bs);
+func buildInput (0) = [];
+func buildInput (c) = 1 : buildInput (c-1);
+
+-- Building/simulating the inputs.
+-- x = 0;
+-- as = [];
+-- bs = [];
+-- while ( x < 1000000) {
+--     x = x + 1;
+--     as = 1:as;
+--     -- bs = 2:bs;
 -- };
 
--- as = [-1,2,3,4];
--- bs = [5,-6,7,8];
+as = buildInput (1000000);
+-- bs = buildInput (2, 1000000);
 
--- solve (as,bs);
+out(length (as));
 
--- func solve ([], bs) = [];
--- func solve (x:y:as, z:bs) = x:y:z:(solve (as, bs));
-
--- as = [1,2,3,4];
--- bs = [5,6,7,8];
-
--- out (solve (as,bs));
--- out (as);
-
--- func solve (0) = 0;
--- func solve (i) = solve (i-1);
-
--- out(solve(10000));
-
--- func solve ([]) = None;
--- func solve (a:as) = solve (as);
-
-func solve(i) = None;
-
-x = 0;
-as = [];
-while ( x < 10000) {
-    x = x + 1;
-    solve (x);
-};
-
-out (as);
-
-solve (as);
-out (9);
-
--- Fix - cant have empty parameters.
--- Implement garbage collection - needs to check call stack for stuff in use.
+-- solve (as, bs);

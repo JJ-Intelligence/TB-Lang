@@ -39,7 +39,7 @@ data Frame = HBinOp BinOpFrame
            deriving (Eq, Show)
 
 -- State - The current state/configuration of the CESK machine.
-type State = (Expr, Environment, Store, Kon)
+type State = (Expr, Environment, Store, Address, Kon)
 
 -- **Expression types**
 
@@ -93,12 +93,13 @@ data ExprValue = VInt Int
 instance Show ExprValue where
   show (VInt n) = show n
   show (VBool b) = show b
-  show (VList []) = "[]"
-  show (VList ((VList xs):ls)) = (show (VList xs)) ++ "\n" ++ (show (VList ls)) 
-  show (VList xs) = filter (/='"') (helper (map (show) xs))
-    where helper [] = " "
-          helper [y] = (show y) ++ " "
-          helper (x:y:xs) = (show x) ++ " " ++ (helper (y:xs))
+  show (VList xs) = "VList " ++ (show xs)
+  -- show (VList []) = "[]"
+  -- show (VList ((VList xs):ls)) = (show (VList xs)) ++ "\n" ++ (show (VList ls)) 
+  -- show (VList xs) = filter (/='"') (helper (map (show) xs))
+  --   where helper [] = " "
+  --         helper [y] = (show y) ++ " "
+  --         helper (x:y:xs) = (show x) ++ " " ++ (helper (y:xs))
   show VNone = "null"
   show (VFunc xs) = "VFunc " ++ (show xs)
   show (GlobalEnv env) = "GlobalEnv " ++ (show env)
