@@ -54,7 +54,7 @@ eval e = do
     eval $ step e
 
 -- Step function to move from one State to another.
-step :: State -> State
+step :: State -> IO State
 
 -- Converting Literals to Values.
 step (Literal (EInt n), env, store, nextAddr, kon) = step (Value $ VInt n, env, store, nextAddr, kon)
