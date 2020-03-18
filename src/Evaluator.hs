@@ -110,7 +110,7 @@ step (Value _, env', store, nextAddr, (BinOpH (BinFuncCallFrame "inp" (Value (VI
 step (FuncCall "head" (FuncParam v FuncParamEnd), env, store, nextAddr, kon) = step (v, env, store, nextAddr, (FuncCallFrame "head" env):kon)
 step (FuncCall "head" _, env, store, nextAddr, kon) = error "head function only takes one parameter - a list."
 step (Value (VList xs), env, store, nextAddr, (FuncCallFrame "head" env'):kon)
-    | length xs == 0 = (Value VNone, env, store, nextAddr, kon) -- Safe head, because we don't hate people <3
+    | length xs == 0 = error "List has no items in - head failed."
     | otherwise = (Value (head xs), env, store, nextAddr, kon)
 step (_, env, store, nextAddr, (FuncCallFrame "head" env'):kon) = error "head function only takes one parameter - a list."
 
@@ -118,7 +118,7 @@ step (_, env, store, nextAddr, (FuncCallFrame "head" env'):kon) = error "head fu
 step (FuncCall "tail" (FuncParam v FuncParamEnd), env, store, nextAddr, kon) = step (v, env, store, nextAddr, (FuncCallFrame "tail" env):kon)
 step (FuncCall "tail" _, env, store, nextAddr, kon) = error "tail function only takes one parameter - a list."
 step (Value (VList xs), env, store, nextAddr, (FuncCallFrame "tail" env'):kon)
-    | length xs == 0 = (Value (VList xs), env, store, nextAddr, kon) -- Safe tail, because we don't hate people <3
+    | length xs == 0 = error "List has no items in - tail failed."
     | otherwise = (Value $ VList (tail xs), env, store, nextAddr, kon)
 step (_, env, store, nextAddr, (FuncCallFrame "tail" env'):kon) = error "tail function only takes one parameter - a list."
 
