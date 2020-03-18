@@ -28,15 +28,10 @@ insertReserved env store = helper ls env (MapL.insert storedGlobalEnv (GlobalEnv
 
 -- Start the evaluator by passing it an Expression (from the Parser).
 startEvaluator :: Expr -> IO ()
-startEvaluator e = eval $ step (e, env, store, heapStart, [Done])
-    where (env, store) = insertReserved (Map.empty) (MapL.empty)
-
--- Eval function encapsulates the step function, and handles its IO calls.
-eval :: IO State -> IO ()
-eval s = do
-    k <- s
-    putStrLn $ "\nKILLLLL MEEEEEE\n"
-
+startEvaluator e = do 
+    s <- step (e, env, store, heapStart, [Done])
+    putStrLn "\nFinished evaluation.\n"
+        where (env, store) = insertReserved (Map.empty) (MapL.empty)
 
 -- Step function to move from one State to another.
 step :: State -> IO State
