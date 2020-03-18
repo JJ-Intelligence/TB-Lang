@@ -32,7 +32,7 @@ data Frame = HBinOp BinOpFrame
            | HTerOp TerOpFrame
            | TerOpH TerOpFrame
            | DefVarFrame String Environment
-           | FuncCallFrame String Environment
+           | FuncCallFrame String
            | ReturnFrame
            | FuncBlockFrame
            | Done 
@@ -85,6 +85,7 @@ data ExprValue = VInt Int
                | VBool Bool
                | VVar String
                | VList [ ExprValue ]
+               | VStream Int [ ExprValue ]
                | VNone
                | VFunc [ ([ExprValue], Expr) ]
                | GlobalEnv Environment
@@ -100,6 +101,7 @@ instance Show ExprValue where
   --   where helper [] = " "
   --         helper [y] = (show y) ++ " "
   --         helper (x:y:xs) = (show x) ++ " " ++ (helper (y:xs))
+  show (VStream n xs) = "VStream " ++ (show n) ++ " " ++ (show xs)
   show VNone = "null"
   show (VFunc xs) = "VFunc " ++ (show xs)
   show (GlobalEnv env) = "GlobalEnv " ++ (show env)
@@ -169,6 +171,7 @@ data Expr = If Expr Expr (Maybe ExprElif)
           | Var String
           | Seq Expr Expr
           | FuncBlock Expr
+          | BuiltInFunc String [Expr]
           deriving (Eq)
 
 instance Show Expr where
@@ -185,3 +188,4 @@ instance Show Expr where
   show (Var s) = s
   show (Seq e1 e2) = (show e1) ++ ";\n" ++ (show e2)
   show (FuncBlock e1) = "{" ++ (show e1) ++ "}"
+  show (BuiltInFunc s _) = s

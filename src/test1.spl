@@ -1,10 +1,10 @@
 -- Challenge 1, solution 1
-func solve ([], bs) = []; 
-func solve (a:[], bs) = []; 
-func solve (x:y:as, z:bs) = x : y : z : solve (as, bs);
+-- func solve ([], bs) = []; 
+-- func solve (a:[], bs) = []; 
+-- func solve (x:y:as, z:bs) = x : y : z : solve (as, bs);
 
-func buildInput (0) = [];
-func buildInput (c) = 1 : buildInput (c-1);
+-- func buildInput (0) = [];
+-- func buildInput (c) = 1 : buildInput (c-1);
 
 -- Building/simulating the inputs.
 -- x = 0;
@@ -23,12 +23,12 @@ func buildInput (c) = 1 : buildInput (c-1);
 
 -- solve (as, bs);
 
-func head2 (xs) = head (xs);
-func test (f, xs) = f (xs);
+-- func head2 (xs) = head (xs);
+-- func test (f, xs) = f (xs);
 
-out(test(head2, [1,2,3]));
+-- out(test(head2, [1,2,3]));
 
-out(head([4,5,6]))
+-- out(head([4,5,6]))
 
 
 -- TODO:
@@ -39,3 +39,20 @@ out(head([4,5,6]))
 -- take - take n items from the list
 
 -- add pre-defined functions to Env and Store so we can pass them as higher-order functions.
+
+out([1,2]);
+
+-- selectInput([1,2,3]);
+
+-- xs = inp(1);
+
+
+-- Store:
+-- (-1) -> VStream Int [VInt 2, ...]
+-- (-2) -> VStream Int []
+-- (-3) -> VStream Int []
+
+
+-- xs -> (1) -> VStream Int [VInt 2, ...]
+-- VList [VInt 2, ...] <-
+

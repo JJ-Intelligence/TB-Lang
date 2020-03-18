@@ -9,34 +9,45 @@ import Debug.Trace
 
 -- Reserved elements of the Store.
 storedGlobalEnv = 0 -- Address of the function CallStack.
-heapStart = 1 -- Starting address of the variable/function heap (space after the reserved area).
+heapStart = 6 -- Starting address of the variable/function heap (space after the reserved area).
 
 -- garbageSize = 10 -- Number of out-of-scope variables allowed in the heap before garbage collection kicks in. (NOW REDUNDANT)
 
--- Insert reserved items into the Store.
-insertReserved :: Store -> Store
-insertReserved store = MapL.insert storedGlobalEnv (GlobalEnv Map.empty) store
+-- Insert reserved items into the Environment and Store.
+insertReserved :: Environment -> Store -> (Environment, Store)
+insertReserved env store = helper ls env (MapL.insert storedGlobalEnv (GlobalEnv Map.empty) store)
+    where ls = [("tail", 1, (VFunc [([VVar "xs"], BuiltInFunc "tail" [Var "xs"])])), 
+                ("head", 2, (VFunc [([VVar "xs"], BuiltInFunc "head" [Var "xs"])])),
+                ("length", 3, (VFunc [([VVar "xs"], BuiltInFunc "length" [Var "xs"])])),
+                ("out", 4, (VFunc [([VVar "v"], BuiltInFunc "out" [Var "v"])])),
+                ("in", 5, (VFunc [([VVar "v"], BuiltInFunc "in" [Var "v"])]))]
+          helper xs env store = foldr (\(s,a,e) (env', store') -> (Map.insert s (a,Global) env', MapL.insert a e store')) (env, store) xs
 
 -- interpret :: String -> State
 -- interpret s = eval $ parse $ alexScanTokens s
 
 -- Start the evaluator by passing it an Expression (from the Parser).
 startEvaluator :: Expr -> IO ()
-startEvaluator e = eval $ step (e, Map.empty, insertReserved MapL.empty, heapStart, [Done])
+startEvaluator e = eval $ step (e, env, store, heapStart, [Done])
+    where (env, store) = insertReserved (Map.empty) (MapL.empty)
 
 -- Eval function encapsulates the step function, and handles its IO calls.
 eval :: State -> IO ()
-eval (Value v, env, store, nextAddr, (FuncCallFrame "out" env'):kon) = do
-    output v env' store
-    eval $ step (Value VNone, env', store, nextAddr, kon)
+eval (Value v, env, store, nextAddr, (FuncCallFrame "out"):kon) = do
+    output v
+    eval $ step (Value VNone, env, store, nextAddr, kon)
 
-eval (Value (VInt n), env, store, nextAddr, (FuncCallFrame "inp" env'):kon) = do
-    (val, store') <- input n 1 store
-    eval $ step (Value val, env', store', nextAddr, kon) 
+eval (Value v, env, store, nextAddr, (FuncCallFrame "in"):kon) = do
+    putStrLn "TODO input"
+    eval $ step (Value VNone, env, store, nextAddr, kon)    
 
-eval (Value (VInt n'), env, store, nextAddr, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n)) env')):kon) = do
-    (val, store') <- input n n' store
-    eval $ step (Value val, env', store', nextAddr, kon)  
+-- eval (Value (VInt n), env, store, nextAddr, (FuncCallFrame "inp" env'):kon) = do
+--     (val, store') <- input n 1 store
+--     eval $ step (Value val, env', store', nextAddr, kon) 
+
+-- eval (Value (VInt n'), env, store, nextAddr, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n)) env')):kon) = do
+--     (val, store') <- input n n' store
+--     eval $ step (Value val, env', store', nextAddr, kon)  
 
 eval s@(_, _, _, _, [Done]) = putStrLn $ "\nFINISHED\n"-- ++(show s)
 eval e = do
@@ -88,47 +99,50 @@ step (Return e1, env, store, nextAddr, FuncBlockFrame:kon) = step (e1, env, stor
 step (Value e1, env, store, nextAddr, FuncBlockFrame:kon) = step (Value VNone, env, store, nextAddr, kon)
 
 -- Function calls.
--- Output function.
-step (FuncCall "out" (FuncParam v FuncParamEnd), env, store, nextAddr, kon) = step (v, env, store, nextAddr, (FuncCallFrame "out" env):kon)
-step (FuncCall "out" _, env, store, nextAddr, kon) = error "out function only takes one parameter - a list to be printed."
-step s@(Value v, env, store, nextAddr, (FuncCallFrame "out" env'):kon) = s
 
 -- Input function.
-    -- Single parameter input.
-step (FuncCall "inp" (FuncParam e1 FuncParamEnd), env, store, nextAddr, kon) = step (e1, env, store, nextAddr, (FuncCallFrame "inp" env):kon)
-step s@(Value (VInt n), env, store, nextAddr, (FuncCallFrame "inp" env'):kon) = s
+--     -- Single parameter input.
+-- step (FuncCall "inp" (FuncParam e1 FuncParamEnd), env, store, nextAddr, kon) = step (e1, env, store, nextAddr, (FuncCallFrame "inp" env):kon)
+-- step s@(Value (VInt n), env, store, nextAddr, (FuncCallFrame "inp" env'):kon) = s
 
-    -- Double parameter input.
-step (FuncCall "inp" (FuncParam e1 (FuncParam e2 FuncParamEnd)), env, store, nextAddr, kon) = step (e1, env, store, nextAddr, (HBinOp (BinFuncCallFrame "inp" e2 env)):kon)
-step (Value (VInt n), env, store, nextAddr, (HBinOp (BinFuncCallFrame "inp" e2 env')):kon) = step (e2, env', store, nextAddr, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n)) env)):kon)
-step (Value _, env, store, nextAddr, (HBinOp (BinFuncCallFrame "inp" e2 env')):kon) = error "inp function must take an int as its first parameter."
-step s@(Value (VInt n), env', store, nextAddr, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n')) env)):kon) = s
-
--- List head function.
-step (FuncCall "head" (FuncParam v FuncParamEnd), env, store, nextAddr, kon) = step (v, env, store, nextAddr, (FuncCallFrame "head" env):kon)
-step (FuncCall "head" _, env, store, nextAddr, kon) = error $ "head function only takes one parameter - a list. "
-step (Value (VList xs), env, store, nextAddr, (FuncCallFrame "head" env'):kon)
-    | length xs == 0 = error "List has no items in - head failed."
-    | otherwise = (Value (head xs), env, store, nextAddr, kon)
-
-
--- List tail function.
-step (FuncCall "tail" (FuncParam v FuncParamEnd), env, store, nextAddr, kon) = step (v, env, store, nextAddr, (FuncCallFrame "tail" env):kon)
-step (FuncCall "tail" _, env, store, nextAddr, kon) = error "tail function only takes one parameter - a list."
-step (Value (VList xs), env, store, nextAddr, (FuncCallFrame "tail" env'):kon)
-    | length xs == 0 = error "List has no items in - tail failed."
-    | otherwise = (Value $ VList (tail xs), env, store, nextAddr, kon)
-
--- List length function
-step (FuncCall "length" (FuncParam v FuncParamEnd), env, store, nextAddr, kon) = step (v, env, store, nextAddr, (FuncCallFrame "length" env):kon)
-step (FuncCall "length" _, env, store, nextAddr, kon) = error "length function only takes one parameter - a list."
-step (Value (VList xs), env, store, nextAddr, (FuncCallFrame "length" env'):kon) = (Value (VInt (length xs)), env', store, nextAddr, kon)
-step (_, env, store, nextAddr, (FuncCallFrame "length" env'):kon) = error "length function only takes one parameter - a list."
+--     -- Double parameter input.
+-- step (FuncCall "inp" (FuncParam e1 (FuncParam e2 FuncParamEnd)), env, store, nextAddr, kon) = step (e1, env, store, nextAddr, (HBinOp (BinFuncCallFrame "inp" e2 env)):kon)
+-- step (Value (VInt n), env, store, nextAddr, (HBinOp (BinFuncCallFrame "inp" e2 env')):kon) = step (e2, env', store, nextAddr, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n)) env)):kon)
+-- step (Value _, env, store, nextAddr, (HBinOp (BinFuncCallFrame "inp" e2 env')):kon) = error "inp function must take an int as its first parameter."
+-- step s@(Value (VInt n), env', store, nextAddr, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n')) env)):kon) = s
 
 -- User-defined function calls.
-step (FuncCall s ps, env, store, nextAddr, kon) = step (Value e2, env, store', nextAddr, kon) -- Continue after function call returns.
+step (FuncCall s ps, env, store, nextAddr, kon)
+    | isFuncCallFrame (head kon'') = c
+    | otherwise = step (Value e2, env, store', nextAddr, kon) -- Continue after function call returns.
     where (e1, env', store', nextAddr') = handleFuncArgs ps env store nextAddr s -- Pattern match
-          (Value e2, _, store'', _, _) = step (e1, env', store', nextAddr', ReturnFrame:kon) -- Recurse into function call.
+          c@(Value e2, _, store'', _, kon'') = step (e1, env', store', nextAddr', ReturnFrame:kon) -- Recurse into function call.
+
+          isFuncCallFrame (FuncCallFrame _) = True
+          isFuncCallFrame (HBinOp (BinFuncCallFrame _ _ _)) = True
+          isFuncCallFrame _ = False
+
+-- Built-in functions.
+step (BuiltInFunc "in" [Var s], env, store, nextAddr, kon) = (Value v, env, store, nextAddr, (FuncCallFrame "in"):kon)
+    where v = (lookupVar s env store)
+
+step (BuiltInFunc "out" [Var s], env, store, nextAddr, kon) = (Value v, env, store, nextAddr, (FuncCallFrame "out"):kon)
+    where v = (lookupVar s env store)
+
+step (BuiltInFunc "length" [Var xs], env, store, nextAddr, kon)
+    | getType v == TList = let (VList xs) = v in step (Value $ VInt $ length xs, env, store, nextAddr, kon)
+    | otherwise = error "Length function must take a list as an argument."
+    where v = (lookupVar xs env store)
+
+step (BuiltInFunc "head" [Var xs], env, store, nextAddr, kon)
+    | getType v == TList = let (VList xs) = v in step (Value $ head xs, env, store, nextAddr, kon)
+    | otherwise = error "Head function must take a list as an argument."
+    where v = (lookupVar xs env store)
+
+step (BuiltInFunc "tail" [Var xs], env, store, nextAddr, kon)
+    | getType v == TList = let (VList xs) = v in step (Value $ VList (tail xs), env, store, nextAddr, kon)
+    | otherwise = error "Tail function must take a list as an argument."
+    where v = (lookupVar xs env store)
 
 -- Returning from a function.
 step (Value e1, env, store, nextAddr, ReturnFrame:kon) = (Value e1, env, store, nextAddr, kon)
@@ -190,10 +204,7 @@ step (Value (VBool b), env, store, nextAddr, (HTerOp (TerWhileOp c e1)):kon)
     | otherwise = (Value VNone, env, store, nextAddr, kon)
 step (Value v, env, store, nextAddr, (TerOpH (TerWhileOp c e1)):kon) = step (c, env, store, nextAddr, (HTerOp $ TerWhileOp c e1):kon)
 
-step (Value _, env, store, nextAddr, (FuncCallFrame "inp" env'):kon) = error "inp function with one parameter must take an Int."
-step (Value _, env', store, nextAddr, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n)) env)):kon) = error "inp function must take an int as its second parameter. "
-step (_, env, store, nextAddr, (FuncCallFrame "head" env'):kon) = error $ "head function only takes one parameter - a list. "
-step (_, env, store, nextAddr, (FuncCallFrame "tail" env'):kon) = error "tail function only takes one parameter - a list. "
+-- Errors ##TODO
 
 -- End of evaluation.
 step s@(_, _, _, _, [Done]) = s
@@ -290,10 +301,9 @@ updateStore store a e1
     | otherwise = MapL.update (\x -> Just e1) a store
     where item = MapL.lookup a store
 
--- Output function. Prints a list of values to stdout.
-output :: ExprValue -> Environment -> Store -> IO ()
-output v env store = putStr (show v)
--- output _ _ _ = error "Invalid arguments for 'out' function, it only takes in a List type."
+-- Output function. Prints values to stdout.
+output :: ExprValue -> IO ()
+output v = putStr (show v)
 
 -- readInputWrapper :: Int -> Store -> (Int, Store)
 -- readInputWrapper streamI store
