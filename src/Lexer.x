@@ -32,7 +32,6 @@ tokens :-
 
     \+                                  { \p _ -> TokenPlus p }
     \-                                  { \p _ -> TokenMinus p }
-    \*                                  { \p _ -> TokenMultiply p }
     \/                                  { \p _ -> TokenDivide p }
     \^                                  { \p _ -> TokenExponent p }
     \%                                  { \p _ -> TokenModulus p }
@@ -43,6 +42,9 @@ tokens :-
     \>                                  { \p _ -> TokenGreaterThan p }
     \=                                  { \p s -> TokenEquals p }
     \:                                  { \p _ -> TokenCons p }
+
+    \*                                  { \p _ -> TokenStar p }
+    \&                                  { \p _ -> TokenAddress p }
 
     $digit+                             { \p s -> TokenInt (read s) p }
     True                                { \p s -> TokenBool True p }
@@ -75,7 +77,6 @@ data Token =  TokenIf               {pos :: AlexPosn}
 
             | TokenPlus             {pos :: AlexPosn}
             | TokenMinus            {pos :: AlexPosn}
-            | TokenMultiply         {pos :: AlexPosn}
             | TokenDivide           {pos :: AlexPosn}
             | TokenExponent         {pos :: AlexPosn}
             | TokenModulus          {pos :: AlexPosn}
@@ -86,6 +87,9 @@ data Token =  TokenIf               {pos :: AlexPosn}
             | TokenLessThan         {pos :: AlexPosn}
             | TokenGreaterThan      {pos :: AlexPosn}
             | TokenCons             {pos :: AlexPosn}
+
+            | TokenStar             {pos :: AlexPosn}
+            | TokenAddress          {pos :: AlexPosn}
 
             | TokenInt              {int :: Int, pos :: AlexPosn}
             | TokenBool             {bool :: Bool, pos :: AlexPosn}
@@ -116,7 +120,6 @@ instance Show Token where
 
     show (TokenPlus _) = "+ "
     show (TokenMinus _) = "- "
-    show (TokenMultiply _) = "* "
     show (TokenDivide _) = "/ "
     show (TokenExponent _) = "^ "
     show (TokenModulus _) = "% "
@@ -127,6 +130,9 @@ instance Show Token where
     show (TokenLessThan _) = "< "
     show (TokenGreaterThan _) = "> "
     show (TokenCons _) = ": "
+
+    show (TokenStar _) = "* "
+    show (TokenAddress _) = "&"
 
     show (TokenInt n _) = (show n) ++ " "
     show (TokenBool b _) = (show b) ++ " "

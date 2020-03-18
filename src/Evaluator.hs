@@ -20,8 +20,7 @@ insertReserved env store = helper ls env (MapL.insert storedGlobalEnv (GlobalEnv
                 ("head", 2, (VFunc [([VVar "xs"], BuiltInFunc "head" [Var "xs"])])),
                 ("length", 3, (VFunc [([VVar "xs"], BuiltInFunc "length" [Var "xs"])])),
                 ("out", 4, (VFunc [([VVar "v"], BuiltInFunc "out" [Var "v"])])),
-                ("in", 5, (VFunc [([VVar "v"], BuiltInFunc "in" [Var "v"])])),
-                ("ref", 6, (VFunc [([VVar "v"], BuiltInFunc "ref" [Var "v"])]))]
+                ("in", 5, (VFunc [([VVar "v"], BuiltInFunc "in" [Var "v"])]))]
           helper xs env store = foldr (\(s,a,e) (env', store') -> (Map.insert s (a,Global) env', MapL.insert a e store')) (env, store) xs
 
 -- interpret :: String -> State
@@ -34,7 +33,7 @@ startEvaluator e = eval $ step (e, env, store, heapStart, [Done])
 
 -- Eval function encapsulates the step function, and handles its IO calls.
 eval :: State -> IO ()
-eval (Value v, env, store, nextAddr, (FuncCallFrame "out"):kon) = do
+eval s@(Value v, env, store, nextAddr, (FuncCallFrame "out"):kon) = do
     output v
     eval $ step (Value VNone, env, store, nextAddr, kon)
 
@@ -91,42 +90,40 @@ step (DefVar s e1, env, store, nextAddr, kon) = step (e1, env, store, nextAddr, 
 step (Value e1, env, store, nextAddr, (DefVarFrame s env'):kon) = step (Value e1, env'', store', nextAddr', kon)
     where (env'', store', nextAddr') = updateEnvStore env' store nextAddr s e1
 
+-- Defining a pointer variable.
+step (DefPointerVar s e1, env, store, nextAddr, kon) = step (e1, env, store, nextAddr, (DefPointerVarFrame s env):kon)
+step (Value e1, env, store, nextAddr, (DefPointerVarFrame s env'):kon)
+    | getType val == TRef = step (Value e1, env', store', nextAddr, kon)
+    | otherwise = error "Pointer is not a reference!"
+    where val = lookupVar s env store
+          (VRef r) = val
+          store' = updateStore store r e1
+
 -- Accessing a variable reference.
 step (Var s, env, store, nextAddr, kon) = step (Value $ lookupVar s env store, env, store, nextAddr, kon)
+
+-- Accessing a variable pointer.
+step (PointerVar s, env, store, nextAddr, kon) = (Value $ lookupPointerVar s env store, env, store, nextAddr, kon)
+
+-- Getting the address for an addressed variable.
+step (AddressVar s, env, store, nextAddr, kon) = (Value $ VRef $ lookupAddr s env, env, store, nextAddr, kon)
 
 -- Function blocks ({ Expr }), which must have a 'return' statement.
 step (FuncBlock e1, env, store, nextAddr, kon) = step (e1, env, store, nextAddr, FuncBlockFrame:kon)
 step (Return e1, env, store, nextAddr, FuncBlockFrame:kon) = step (e1, env, store, nextAddr, kon)
 step (Value e1, env, store, nextAddr, FuncBlockFrame:kon) = step (Value VNone, env, store, nextAddr, kon)
 
--- Function calls.
-
--- Input function.
---     -- Single parameter input.
--- step (FuncCall "inp" (FuncParam e1 FuncParamEnd), env, store, nextAddr, kon) = step (e1, env, store, nextAddr, (FuncCallFrame "inp" env):kon)
--- step s@(Value (VInt n), env, store, nextAddr, (FuncCallFrame "inp" env'):kon) = s
-
---     -- Double parameter input.
--- step (FuncCall "inp" (FuncParam e1 (FuncParam e2 FuncParamEnd)), env, store, nextAddr, kon) = step (e1, env, store, nextAddr, (HBinOp (BinFuncCallFrame "inp" e2 env)):kon)
--- step (Value (VInt n), env, store, nextAddr, (HBinOp (BinFuncCallFrame "inp" e2 env')):kon) = step (e2, env', store, nextAddr, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n)) env)):kon)
--- step (Value _, env, store, nextAddr, (HBinOp (BinFuncCallFrame "inp" e2 env')):kon) = error "inp function must take an int as its first parameter."
--- step s@(Value (VInt n), env', store, nextAddr, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n')) env)):kon) = s
-
 -- User-defined function calls.
 step (FuncCall s ps, env, store, nextAddr, kon)
-    | isFuncCallFrame (head kon'') = c
-    | otherwise = step (Value e2, env, store', nextAddr, kon) -- Continue after function call returns.
+    | isFuncCallFrame (head kon'') = (Value e2, env, store'', nextAddr, (head kon''):kon)
+    | otherwise = step (Value e2, env, store'', nextAddr, kon) -- Continue after function call returns.
     where (e1, env', store', nextAddr') = handleFuncArgs ps env store nextAddr s -- Pattern match
-          c@(Value e2, _, store'', _, kon'') = step (e1, env', store', nextAddr', ReturnFrame:kon) -- Recurse into function call.
+          (Value e2, _, store'', _, kon'') = step (e1, env', store', nextAddr', ReturnFrame:kon) -- Recurse into function call.
 
           isFuncCallFrame (FuncCallFrame _) = True
-          isFuncCallFrame (HBinOp (BinFuncCallFrame _ _ _)) = True
           isFuncCallFrame _ = False
 
 -- Built-in functions.
-step (BuiltInFunc "ref" [Var s], env, store, nextAddr, kon) = step (Value $ VRef v, env, store, nextAddr, kon)
-    where v = (lookupAddr s env)
-
 step (BuiltInFunc "in" [Var s], env, store, nextAddr, kon) = (Value v, env, store, nextAddr, (FuncCallFrame "in"):kon)
     where v = (lookupVar s env store)
 
@@ -261,6 +258,7 @@ getType :: ExprValue -> Type
 getType (VInt _) = TInt
 getType (VBool _) = TBool
 getType (VList _) = TList
+getType (VRef _) = TRef
 
 -- Lookup a variable in the Environment and Store. Throw an error if it can't be found, else return its corresponding ExprValue.
 lookupVar :: String -> Environment -> Store -> ExprValue
@@ -271,10 +269,17 @@ lookupVar s env store
     where addr = Map.lookup s env
           val = MapL.lookup (fst $ fromJust addr) store
 
+lookupPointerVar :: String -> Environment -> Store -> ExprValue
+lookupPointerVar s env store
+    | getType val == TRef = fromJust $ MapL.lookup r store
+    | otherwise = error "Error, variable is not a pointer!"
+    where val = lookupVar s env store
+          (VRef r) = val
+
 lookupAddr :: String -> Environment -> Address
 lookupAddr s env
     | addr == Nothing = error $ "Value " ++ s ++ " is not in the Environment (has not been defined) -> " ++ (show env)
-    | otherwise = fromJust val
+    | otherwise = fst $ fromJust addr
     where addr = Map.lookup s env
 
 -- Binds a String to an expression, overriding the String address and scope if it already exists in the Environment.
