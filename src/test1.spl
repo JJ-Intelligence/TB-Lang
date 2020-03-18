@@ -56,3 +56,26 @@ out([1,2]);
 -- xs -> (1) -> VStream Int [VInt 2, ...]
 -- VList [VInt 2, ...] <-
 
+
+
+
+
+
+xs = [];  
+rs = ref(xs); 
+rs = 1:rs ** Updates the value of xs.
+as = dref (rs) ** Creates a copy of xs and binds the copy to as' address.
+
+
+xs -> 1 -> VList []
+rs -> 2 -> Ref 1
+
+rs -> 2 -> Ref 1
+xs => -> 1 -> VList [1]
+
+
+as -> 3 -> VList [1]
+as -> 3 -> VList [1,2]
+
+VRef Address
+

@@ -9,7 +9,7 @@ import Debug.Trace
 
 -- Reserved elements of the Store.
 storedGlobalEnv = 0 -- Address of the function CallStack.
-heapStart = 6 -- Starting address of the variable/function heap (space after the reserved area).
+heapStart = 10 -- Starting address of the variable/function heap (space after the reserved area).
 
 -- garbageSize = 10 -- Number of out-of-scope variables allowed in the heap before garbage collection kicks in. (NOW REDUNDANT)
 
@@ -20,7 +20,8 @@ insertReserved env store = helper ls env (MapL.insert storedGlobalEnv (GlobalEnv
                 ("head", 2, (VFunc [([VVar "xs"], BuiltInFunc "head" [Var "xs"])])),
                 ("length", 3, (VFunc [([VVar "xs"], BuiltInFunc "length" [Var "xs"])])),
                 ("out", 4, (VFunc [([VVar "v"], BuiltInFunc "out" [Var "v"])])),
-                ("in", 5, (VFunc [([VVar "v"], BuiltInFunc "in" [Var "v"])]))]
+                ("in", 5, (VFunc [([VVar "v"], BuiltInFunc "in" [Var "v"])])),
+                ("ref", 6, (VFunc [([VVar "v"], BuiltInFunc "ref" [Var "v"])]))]
           helper xs env store = foldr (\(s,a,e) (env', store') -> (Map.insert s (a,Global) env', MapL.insert a e store')) (env, store) xs
 
 -- interpret :: String -> State
@@ -123,6 +124,9 @@ step (FuncCall s ps, env, store, nextAddr, kon)
           isFuncCallFrame _ = False
 
 -- Built-in functions.
+step (BuiltInFunc "ref" [Var s], env, store, nextAddr, kon) = step (Value $ VRef v, env, store, nextAddr, kon)
+    where v = (lookupAddr s env)
+
 step (BuiltInFunc "in" [Var s], env, store, nextAddr, kon) = (Value v, env, store, nextAddr, (FuncCallFrame "in"):kon)
     where v = (lookupVar s env store)
 
@@ -266,6 +270,12 @@ lookupVar s env store
     | otherwise = fromJust val
     where addr = Map.lookup s env
           val = MapL.lookup (fst $ fromJust addr) store
+
+lookupAddr :: String -> Environment -> Address
+lookupAddr s env
+    | addr == Nothing = error $ "Value " ++ s ++ " is not in the Environment (has not been defined) -> " ++ (show env)
+    | otherwise = fromJust val
+    where addr = Map.lookup s env
 
 -- Binds a String to an expression, overriding the String address and scope if it already exists in the Environment.
 overrideEnvStore :: Environment -> Store -> Address -> String -> ExprValue -> Scope -> (Environment, Store, Address)
