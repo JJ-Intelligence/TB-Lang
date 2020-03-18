@@ -1,7 +1,7 @@
 
 func foo (x) = {
-    out(x);
     *x = 5;
+    out(x);
 };
 
 y = 0;

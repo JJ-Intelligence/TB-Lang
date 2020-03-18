@@ -32,26 +32,11 @@ startEvaluator e = eval $ step (e, env, store, heapStart, [Done])
     where (env, store) = insertReserved (Map.empty) (MapL.empty)
 
 -- Eval function encapsulates the step function, and handles its IO calls.
-eval :: State -> IO ()
-eval s@(Value v, env, store, nextAddr, (FuncCallFrame "out"):kon) = do
-    output v
-    eval $ step (Value VNone, env, store, nextAddr, kon)
+eval :: IO State -> IO ()
+eval s = do
+    k <- s
+    putStrLn $ "\nKILLLLL MEEEEEE\n"
 
-eval (Value v, env, store, nextAddr, (FuncCallFrame "in"):kon) = do
-    putStrLn "TODO input"
-    eval $ step (Value VNone, env, store, nextAddr, kon)    
-
--- eval (Value (VInt n), env, store, nextAddr, (FuncCallFrame "inp" env'):kon) = do
---     (val, store') <- input n 1 store
---     eval $ step (Value val, env', store', nextAddr, kon) 
-
--- eval (Value (VInt n'), env, store, nextAddr, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n)) env')):kon) = do
---     (val, store') <- input n n' store
---     eval $ step (Value val, env', store', nextAddr, kon)  
-
-eval s@(_, _, _, _, [Done]) = putStrLn $ "\nFINISHED\n"-- ++(show s)
-eval e = do
-    eval $ step e
 
 -- Step function to move from one State to another.
 step :: State -> IO State
@@ -103,10 +88,10 @@ step (Value e1, env, store, nextAddr, (DefPointerVarFrame s env'):kon)
 step (Var s, env, store, nextAddr, kon) = step (Value $ lookupVar s env store, env, store, nextAddr, kon)
 
 -- Accessing a variable pointer.
-step (PointerVar s, env, store, nextAddr, kon) = (Value $ lookupPointerVar s env store, env, store, nextAddr, kon)
+step (PointerVar s, env, store, nextAddr, kon) = step (Value $ lookupPointerVar s env store, env, store, nextAddr, kon)
 
 -- Getting the address for an addressed variable.
-step (AddressVar s, env, store, nextAddr, kon) = (Value $ VRef $ lookupAddr s env, env, store, nextAddr, kon)
+step (AddressVar s, env, store, nextAddr, kon) = step (Value $ VRef $ lookupAddr s env, env, store, nextAddr, kon)
 
 -- Function blocks ({ Expr }), which must have a 'return' statement.
 step (FuncBlock e1, env, store, nextAddr, kon) = step (e1, env, store, nextAddr, FuncBlockFrame:kon)
@@ -114,21 +99,21 @@ step (Return e1, env, store, nextAddr, FuncBlockFrame:kon) = step (e1, env, stor
 step (Value e1, env, store, nextAddr, FuncBlockFrame:kon) = step (Value VNone, env, store, nextAddr, kon)
 
 -- User-defined function calls.
-step (FuncCall s ps, env, store, nextAddr, kon)
-    | isFuncCallFrame (head kon'') = (Value e2, env, store'', nextAddr, (head kon''):kon)
-    | otherwise = step (Value e2, env, store'', nextAddr, kon) -- Continue after function call returns.
-    where (e1, env', store', nextAddr') = handleFuncArgs ps env store nextAddr s -- Pattern match
-          (Value e2, _, store'', _, kon'') = step (e1, env', store', nextAddr', ReturnFrame:kon) -- Recurse into function call.
+step (FuncCall s ps, env, store, nextAddr, kon) = do
+    args <- evaluateArgs ps env store nextAddr []
+    let (e1, env', store', nextAddr') = handleFuncArgs args env store nextAddr s -- Pattern match
+    (Value e2, _, store'', _, _) <- step (e1, env', store', nextAddr', ReturnFrame:kon) -- Recurse into function call.
 
-          isFuncCallFrame (FuncCallFrame _) = True
-          isFuncCallFrame _ = False
+    step (Value e2, env, store'', nextAddr, kon) -- Continue after function call returns.
 
 -- Built-in functions.
-step (BuiltInFunc "in" [Var s], env, store, nextAddr, kon) = (Value v, env, store, nextAddr, (FuncCallFrame "in"):kon)
-    where v = (lookupVar s env store)
+-- step (BuiltInFunc "in" [Var s], env, store, nextAddr, kon) = return (Value v, env, store, nextAddr, (FuncCallFrame "in"):kon)
+--     where v = (lookupVar s env store)
 
-step (BuiltInFunc "out" [Var s], env, store, nextAddr, kon) = (Value v, env, store, nextAddr, (FuncCallFrame "out"):kon)
-    where v = (lookupVar s env store)
+step (BuiltInFunc "out" [Var s], env, store, nextAddr, kon) = do
+    putStrLn $ show v
+    return (Value v, env, store, nextAddr, kon)
+        where v = (lookupVar s env store)
 
 step (BuiltInFunc "length" [Var xs], env, store, nextAddr, kon)
     | getType v == TList = let (VList xs) = v in step (Value $ VInt $ length xs, env, store, nextAddr, kon)
@@ -146,7 +131,7 @@ step (BuiltInFunc "tail" [Var xs], env, store, nextAddr, kon)
     where v = (lookupVar xs env store)
 
 -- Returning from a function.
-step (Value e1, env, store, nextAddr, ReturnFrame:kon) = (Value e1, env, store, nextAddr, kon)
+step (Value e1, env, store, nextAddr, ReturnFrame:kon) = return (Value e1, env, store, nextAddr, kon)
 
 -- Math binary operations.
 step (Op (MathOp op e1 e2), env, store, nextAddr, kon) = step (e1, env, store, nextAddr, (HBinOp $ BinMathOp op e2 env):kon)
@@ -202,31 +187,32 @@ step (Value (VBool b), env, store, nextAddr, (HTerOp (TerIfOp e1 e2)):kon)
 step (While c e1, env, store, nextAddr, kon) = step (c, env, store, nextAddr, (HTerOp $ TerWhileOp c e1):kon)
 step (Value (VBool b), env, store, nextAddr, (HTerOp (TerWhileOp c e1)):kon)
     | b = step (e1, env, store, nextAddr, (TerOpH $ TerWhileOp c e1):kon)
-    | otherwise = (Value VNone, env, store, nextAddr, kon)
+    | otherwise = step (Value VNone, env, store, nextAddr, kon)
 step (Value v, env, store, nextAddr, (TerOpH (TerWhileOp c e1)):kon) = step (c, env, store, nextAddr, (HTerOp $ TerWhileOp c e1):kon)
 
--- Errors ##TODO
-
 -- End of evaluation.
-step s@(_, _, _, _, [Done]) = s
+step s@(_, _, _, _, [Done]) = return s
 
 -- No defined step for the current State.
 step s@(exp, env, store, nextAddr, kon) = error $ "ERROR evaluating expression " ++ (show s) ++ ", no CESK step defined."
 
 
+-- Evaluate arguments to an ExprValue.
+evaluateArgs :: Parameters -> Environment -> Store -> Address -> [ExprValue] -> IO [ExprValue]
+evaluateArgs FuncParamEnd env store nextAddr ls = return ls
+evaluateArgs (FuncParam e1 e2) env store nextAddr ls = do
+    (Value e1',_,_,_,_) <- step (e1, env, store, nextAddr, [Done])
+    evaluateArgs e2 env store nextAddr (e1':ls)
+
+
 -- Pattern matches a function parameters with some given arguments, returning the functions Expr value, as well as updated Env, Store, and next Address.
 -- Takes in the unevaluated arguments, the current Env, Store and next Address, as well as the function name.
-handleFuncArgs :: Parameters -> Environment -> Store -> Address -> String -> (Expr, Environment, Store, Address)
-handleFuncArgs args env store nextAddr s = (e1, env', store'', nextAddr')
+handleFuncArgs :: [ExprValue] -> Environment -> Store -> Address -> String -> (Expr, Environment, Store, Address)
+handleFuncArgs args' env store nextAddr s = (e1, env', store'', nextAddr')
     where (env', store'', nextAddr') = foldr (\(s, e2) (accEnv, accStore, addr) -> (overrideEnvStore accEnv accStore addr s e2 Local)) (globalEnv, store', nextAddr) xs
           (e1, xs) = matchArgsToFunc args' (lookupVar s env store)
-          args' = evaluateArgs args env store nextAddr
           (globalEnv, store') = let (Just (GlobalEnv e)) = MapL.lookup storedGlobalEnv store in 
                                  if (e == Map.empty) then (env, MapL.update (\x -> Just $ GlobalEnv env) storedGlobalEnv store) else (e, store) -- update Global Env
-
-          evaluateArgs FuncParamEnd env store nextAddr = []
-          evaluateArgs (FuncParam e1 e2) env store nextAddr = e1' : evaluateArgs e2 env store nextAddr
-                where (Value e1',_,_,_,_) = step (e1, env, store, nextAddr, [Done])
 
 -- Takes in a list of evaluated arguments, and a list of evaluated function parameters.
 -- Returns the function Expr value to use, as well as a list of Strings to ExprValues which need to be added to the Env and Store.
@@ -315,10 +301,6 @@ updateStore store a e1
     | item == Nothing = MapL.insert a e1 store
     | otherwise = MapL.update (\x -> Just e1) a store
     where item = MapL.lookup a store
-
--- Output function. Prints values to stdout.
-output :: ExprValue -> IO ()
-output v = putStr (show v)
 
 -- readInputWrapper :: Int -> Store -> (Int, Store)
 -- readInputWrapper streamI store
