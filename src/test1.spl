@@ -16,9 +16,26 @@ func buildInput (c) = 1 : buildInput (c-1);
 --     -- bs = 2:bs;
 -- };
 
-as = buildInput (1000000);
+-- as = buildInput (1000000);
 -- bs = buildInput (2, 1000000);
 
-out(length (as));
+-- out(length (as));
 
 -- solve (as, bs);
+
+func head2 (xs) = head (xs);
+func test (f, xs) = f (xs);
+
+out(test(head2, [1,2,3]));
+
+out(head([4,5,6]))
+
+
+-- TODO:
+-- call-by-reference - &xs gets the address of xs, and can be used to pass into functions (like C)
+-- pop - remove item from a list and return it
+-- peek - look at the item from the top of the list
+-- drop - drop n items from the list
+-- take - take n items from the list
+
+-- add pre-defined functions to Env and Store so we can pass them as higher-order functions.

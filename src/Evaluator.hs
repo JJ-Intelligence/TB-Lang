@@ -97,22 +97,20 @@ step s@(Value v, env, store, nextAddr, (FuncCallFrame "out" env'):kon) = s
     -- Single parameter input.
 step (FuncCall "inp" (FuncParam e1 FuncParamEnd), env, store, nextAddr, kon) = step (e1, env, store, nextAddr, (FuncCallFrame "inp" env):kon)
 step s@(Value (VInt n), env, store, nextAddr, (FuncCallFrame "inp" env'):kon) = s
-step (Value _, env, store, nextAddr, (FuncCallFrame "inp" env'):kon) = error "inp function with one parameter must take an Int."
 
     -- Double parameter input.
 step (FuncCall "inp" (FuncParam e1 (FuncParam e2 FuncParamEnd)), env, store, nextAddr, kon) = step (e1, env, store, nextAddr, (HBinOp (BinFuncCallFrame "inp" e2 env)):kon)
 step (Value (VInt n), env, store, nextAddr, (HBinOp (BinFuncCallFrame "inp" e2 env')):kon) = step (e2, env', store, nextAddr, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n)) env)):kon)
 step (Value _, env, store, nextAddr, (HBinOp (BinFuncCallFrame "inp" e2 env')):kon) = error "inp function must take an int as its first parameter."
 step s@(Value (VInt n), env', store, nextAddr, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n')) env)):kon) = s
-step (Value _, env', store, nextAddr, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n)) env)):kon) = error "inp function must take an int as its second parameter."
 
 -- List head function.
 step (FuncCall "head" (FuncParam v FuncParamEnd), env, store, nextAddr, kon) = step (v, env, store, nextAddr, (FuncCallFrame "head" env):kon)
-step (FuncCall "head" _, env, store, nextAddr, kon) = error "head function only takes one parameter - a list."
+step (FuncCall "head" _, env, store, nextAddr, kon) = error $ "head function only takes one parameter - a list. "
 step (Value (VList xs), env, store, nextAddr, (FuncCallFrame "head" env'):kon)
     | length xs == 0 = error "List has no items in - head failed."
     | otherwise = (Value (head xs), env, store, nextAddr, kon)
-step (_, env, store, nextAddr, (FuncCallFrame "head" env'):kon) = error "head function only takes one parameter - a list."
+
 
 -- List tail function.
 step (FuncCall "tail" (FuncParam v FuncParamEnd), env, store, nextAddr, kon) = step (v, env, store, nextAddr, (FuncCallFrame "tail" env):kon)
@@ -120,7 +118,6 @@ step (FuncCall "tail" _, env, store, nextAddr, kon) = error "tail function only 
 step (Value (VList xs), env, store, nextAddr, (FuncCallFrame "tail" env'):kon)
     | length xs == 0 = error "List has no items in - tail failed."
     | otherwise = (Value $ VList (tail xs), env, store, nextAddr, kon)
-step (_, env, store, nextAddr, (FuncCallFrame "tail" env'):kon) = error "tail function only takes one parameter - a list."
 
 -- List length function
 step (FuncCall "length" (FuncParam v FuncParamEnd), env, store, nextAddr, kon) = step (v, env, store, nextAddr, (FuncCallFrame "length" env):kon)
@@ -192,6 +189,11 @@ step (Value (VBool b), env, store, nextAddr, (HTerOp (TerWhileOp c e1)):kon)
     | b = step (e1, env, store, nextAddr, (TerOpH $ TerWhileOp c e1):kon)
     | otherwise = (Value VNone, env, store, nextAddr, kon)
 step (Value v, env, store, nextAddr, (TerOpH (TerWhileOp c e1)):kon) = step (c, env, store, nextAddr, (HTerOp $ TerWhileOp c e1):kon)
+
+step (Value _, env, store, nextAddr, (FuncCallFrame "inp" env'):kon) = error "inp function with one parameter must take an Int."
+step (Value _, env', store, nextAddr, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n)) env)):kon) = error "inp function must take an int as its second parameter. "
+step (_, env, store, nextAddr, (FuncCallFrame "head" env'):kon) = error $ "head function only takes one parameter - a list. "
+step (_, env, store, nextAddr, (FuncCallFrame "tail" env'):kon) = error "tail function only takes one parameter - a list. "
 
 -- End of evaluation.
 step s@(_, _, _, _, [Done]) = s
