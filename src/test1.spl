@@ -23,13 +23,8 @@ func buildInput (c) = 1 : buildInput (c-1);
 
 -- solve (as, bs);
 
-func head2 (xs) = head (xs);
-func test (f, xs) = f (xs);
-
-out(test(head2, [1,2,3]));
-
-out(head([4,5,6]))
-
+func foo (x, y) = x(y);
+out(foo(func l (e)=e+2, 3));
 
 -- TODO:
 -- call-by-reference - &xs gets the address of xs, and can be used to pass into functions (like C)

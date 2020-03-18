@@ -190,6 +190,13 @@ step (Value (VBool b), env, store, nextAddr, (HTerOp (TerWhileOp c e1)):kon)
     | otherwise = (Value VNone, env, store, nextAddr, kon)
 step (Value v, env, store, nextAddr, (TerOpH (TerWhileOp c e1)):kon) = step (c, env, store, nextAddr, (HTerOp $ TerWhileOp c e1):kon)
 
+-- For loop.
+step (While c e1, env, store, nextAddr, kon) = step (c, env, store, nextAddr, (HTerOp $ TerWhileOp c e1):kon)
+step (Value (VBool b), env, store, nextAddr, (HTerOp (TerWhileOp c e1)):kon)
+    | b = step (e1, env, store, nextAddr, (TerOpH $ TerWhileOp c e1):kon)
+    | otherwise = (Value VNone, env, store, nextAddr, kon)
+step (Value v, env, store, nextAddr, (TerOpH (TerWhileOp c e1)):kon) = step (c, env, store, nextAddr, (HTerOp $ TerWhileOp c e1):kon)
+
 step (Value _, env, store, nextAddr, (FuncCallFrame "inp" env'):kon) = error "inp function with one parameter must take an Int."
 step (Value _, env', store, nextAddr, (BinOpH (BinFuncCallFrame "inp" (Value (VInt n)) env)):kon) = error "inp function must take an int as its second parameter. "
 step (_, env, store, nextAddr, (FuncCallFrame "head" env'):kon) = error $ "head function only takes one parameter - a list. "

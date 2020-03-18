@@ -20,6 +20,7 @@ tokens :-
     while                               { \p s -> TokenWhile p }
     func                                { \p s -> TokenFuncDef p }
     return                              { \p s -> TokenReturn p }
+    for                                 { \p s -> TokenFor p }
 
     \;                                  { \p s -> TokenSeq p }
     \(                                  { \p s -> TokenOpenParen p }
