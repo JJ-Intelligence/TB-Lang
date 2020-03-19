@@ -1,11 +1,10 @@
 -- Challenge 1, solution 1
-func solve ([], bs) = return; 
-func solve (x:y:as, z:bs) = {
-	out (x:y:z:[]);
-	solve (as, bs);
-	return;
+func f (as, bs) = {
+    out(pop(as));
+    out(pop(as));
+    out(pop(bs));
 };
 
-as:bs:[] = input;
-
-solve (as,bs);
+while (hasElems(2, in(0)) && hasElems(1, in(1))) {
+    f(in(0), in(1));
+}
