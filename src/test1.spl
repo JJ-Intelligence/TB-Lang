@@ -1,12 +1,51 @@
 
 
-i = [1,2,3];
-k = &(4);
-*k = *k + 2;
-out(*k);
-out(i);
+-- i = [1,2,3];
+-- k = &(4);
+-- *k = *k + 2;
+-- out(*k);
+-- out(i);
 
 
--- Order of arguments is for some reason reverse of 
--- order of parameters!
--- Check eval args function
+-- streamNumber = 0;
+-- xs = inp(streamNumber); <- xs becomes a reference to streamnumber input address.
+
+
+
+
+
+-- TODO:
+-- func solve (*(x:y:ys), k) = {
+--     out(x);
+--     out(y);
+--     out(ys);
+--     out(k);
+-- };
+
+-- xs = &([1,2,3,4,5]) -- 6,7,8
+
+-- solve(xs, 8);
+
+-- x -> ListRef 11 (Index 0 (Index 1 End))
+
+
+xs = in(0); -- Ref -1,   -1 -> VStream Int []
+ys = in(1);
+
+out(ys);
+out(*ys);
+
+out(drop(2, ys));
+out(*ys);
+
+out(*xs);
+
+-- while (hasElems(1, xs)) {
+    
+--     x = pop(xs);
+--     y = pop(xs);
+--     z = pop(ys);
+
+--     out([x,y,z]);
+
+-- }

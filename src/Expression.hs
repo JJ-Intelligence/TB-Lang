@@ -53,6 +53,7 @@ data Type = TInt
           | TBool 
           | TEmpty 
           | TList
+          | TStream
           | TRef
           | TConflict deriving (Eq)
 
@@ -61,6 +62,7 @@ instance Show Type where
     show TBool = "Boolean"
     show TEmpty = ""
     show TList = "[]" 
+    show TStream = "Stream"
     show TRef = "Reference"
     show TConflict = "Conflict"
 

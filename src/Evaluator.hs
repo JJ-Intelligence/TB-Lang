@@ -8,8 +8,8 @@ import Data.Maybe
 import Debug.Trace
 
 -- Reserved elements of the Store.
-storedGlobalEnv = 0 -- Address of the function CallStack.
-heapStart = 10 -- Starting address of the variable/function heap (space after the reserved area).
+storedGlobalEnv = 10 -- Address of the function CallStack.
+heapStart = 11 -- Starting address of the variable/function heap (space after the reserved area).
 
 -- garbageSize = 10 -- Number of out-of-scope variables allowed in the heap before garbage collection kicks in. (NOW REDUNDANT)
 
@@ -110,8 +110,15 @@ step (FuncCall s ps, env, store, nextAddr, kon) = do
     step (Value e2, env, store''', nextAddr, kon) -- Continue after function call returns.
 
 -- Built-in functions.
--- step (BuiltInFunc "in" [Var s], env, store, nextAddr, kon) = return (Value v, env, store, nextAddr, (FuncCallFrame "in"):kon)
---     where v = (lookupVar s env store)
+step (BuiltInFunc "in" [Var s], env, store, nextAddr, kon)
+    | getType v == TInt = step (Value $ VRef $ -n, env, store', nextAddr, kon)
+    | otherwise = error "in function takes one parameter, an Int."
+    where v = (lookupVar s env store)
+          (VInt n) = v
+          stream = MapL.lookup (-n) store
+          store' = case stream of
+                        Just (VStream i xs) -> store
+                        Nothing -> updateStore store (-n) (VStream n [])
 
 step (BuiltInFunc "out" [Var s], env, store, nextAddr, kon) = do
     putStrLn $ show v
@@ -134,17 +141,37 @@ step (BuiltInFunc "tail" [Var xs], env, store, nextAddr, kon)
     where v = (lookupVar xs env store)
 
 step (BuiltInFunc "drop" [Var num, Var list], env, store, nextAddr, kon)
-    | getType n == TInt && getType xs == TList = let (VList xs') = xs; (VInt n') = n in 
-                                                    step (Value $ VList (drop n' xs'), env, store, nextAddr, kon)
+    | getType n == TInt = case getType xs of
+
+            TList -> let (VList xs') = xs in
+                    case (length xs' >= n') of
+                        True -> step (Value $ VList (drop n' xs'), env, store, nextAddr, kon)
+                        False -> error "Plz make list bigger."
+
+            TRef -> case (MapL.lookup r store) of 
+                    Just (VList ys) -> case (length ys >= n') of 
+                            True -> let store' = updateStore store r (VList (drop n' ys)) in 
+                                        step (Value $ VList (drop n' ys), env, store', nextAddr, kon)
+                            False -> error "Plz make list bigger."
+
+                    Just (VStream i ys) -> do
+                        (zs, store') <- dropStreamInput (VStream i ys) n' store
+                        step (Value $ VList zs, env, store', nextAddr, kon)
+
+                    _ -> error $ "Drop function only takes a reference to a list or stream."
+
     | otherwise = error $ "Drop function takes in an int and a list. "
     where n = (lookupVar num env store)
+          (VInt n') = n
           xs = (lookupVar list env store)
+          (VRef r) = xs
 
-step (BuiltInFunc "take" [Var num, Var list], env, store, nextAddr, kon)
-    | getType n == TInt && getType xs == TList = let (VList xs') = xs; (VInt n') = n in 
+step (BuiltInFunc "take" [Var num, Var list], env, store, nextAddr, kon) -- TODO - check length of the List
+    | getType n == TInt && getType xs == TList = let (VList xs') = xs in 
                                                     step (Value $ VList (take n' xs'), env, store, nextAddr, kon)
     | otherwise = error "Take function takes in an int and a list."
     where n = (lookupVar num env store)
+          (VInt n') = n
           xs = (lookupVar list env store)
 
 step (BuiltInFunc "get" [Var num, Var list], env, store, nextAddr, kon)
@@ -157,13 +184,23 @@ step (BuiltInFunc "get" [Var num, Var list], env, store, nextAddr, kon)
           xs = (lookupVar list env store)
 
 step (BuiltInFunc "pop" [Var list], env, store, nextAddr, kon)
-    | getType v /= TRef || ls == Nothing || getType (fromJust ls) /= TList || length xs < 1 = error $ "Pop function takes in a list."
-    | otherwise = step (Value $ head xs, env, store', nextAddr, kon)
+    | getType v == TRef && ls /= Nothing = 
+        case (getType (fromJust ls)) of
+                TList -> let (VList xs) = fromJust ls in 
+                    case (length xs > 0) of
+                        True -> step (Value $ head xs, env, updateStore store r (VList (tail xs)), nextAddr, kon)
+                        False -> error $ "Length of list must be at least 1."
+
+                TStream -> do
+                    (ys, store') <- dropStreamInput (fromJust ls) 1 store
+                    step (Value $ head ys, env, store', nextAddr, kon)
+
+                _ -> error $ "Pop function takes in a reference to a list or stream."
+
+    | otherwise = error $ "Pop function takes in a reference to a value."
     where v = lookupVar list env store
           (VRef r) = v
           ls = MapL.lookup r store
-          (VList xs) = fromJust ls
-          store' = updateStore store r (VList (tail xs))
 
 -- Returning from a function.
 step (Value e1, env, store, nextAddr, ReturnFrame:kon) = return (Value e1, env, store, nextAddr, kon)
@@ -289,6 +326,7 @@ getType (VInt _) = TInt
 getType (VBool _) = TBool
 getType (VList _) = TList
 getType (VRef _) = TRef
+getType (VStream _ _) = TStream
 
 -- Lookup a variable in the Environment and Store. Throw an error if it can't be found, else return its corresponding ExprValue.
 lookupVar :: String -> Environment -> Store -> ExprValue
@@ -346,37 +384,44 @@ updateStore store a e1
     | otherwise = MapL.update (\x -> Just e1) a store
     where item = MapL.lookup a store
 
--- readInputWrapper :: Int -> Store -> (Int, Store)
--- readInputWrapper streamI store
---     | length $ buffer > streamI || (length $ buffer) == 0 = (head newBuffer,  updateStore 1 (VInputBuffer newBuffer) store)
---     | otherwise = (head buffer, updateStore 1 (VInputBuffer ) store)
---     where
---         buffer = buffers !! streamI
---         buffers = removeVInputBuffer (lookup 1 store)
---         newBuffer = readInput buffers 1
---         removeVInputBuffer (VInputBuffer e) = e
+-- Takes in stream num, num of values to get from the buffer, and the current store.
+-- Returns updated store and list of values retrieved.
+dropStreamInput :: ExprValue -> Int -> Store -> IO ([ExprValue], Store)
+dropStreamInput (VStream i xs) n store = do
+    store' <- case length xs >= n of
+                        True -> return store
+                        False -> do updateStreams (n - length xs) store
+
+    let (Just (VStream i' ys)) = MapL.lookup (-i) store'
+
+    return (take n ys, MapL.update (\x -> Just (VStream i' $ drop n ys)) (-i') store')
+
+dropStreamInput _ _ _ = error "dropStreamInput function only takes in a VStream type."
 
 -- Input function. Reads in n values from a given sequence.
--- Takes in the functions parameters, the current Environment and Store, returning an ExprValue and the updated Store (containing updated buffers (VLists))
-input :: Int -> Int -> Store -> IO (ExprValue, Store)
-input seqNo n store = return (VNone, store)
+updateStreams :: Int -> Store -> IO Store
+updateStreams n store = do
+    xss <- readInput [] n
+    return $ fst $ foldl (\(store', c) xs -> case MapL.lookup c store' of
+                                            Just (VStream i ys) -> (MapL.update (\x -> Just (VStream i (ys++xs))) c store', c-1)
+                                            Nothing -> (MapL.insert c (VStream (abs c) xs) store', c-1)
+                                            _ -> error "Should be a VStream in negative Store addresses."
+                            ) (store, 0) xss
 
 -- Read n lines of input into stream buffers (a list of lists).
-readInput :: [[Int]] -> Int -> IO [[Int]]
+readInput :: [[ExprValue]] -> Int -> IO [[ExprValue]]
 readInput xs 0 = return xs
-readInput [] n
-    | n > 0 = do
-        line <- getLine
-        let line' = foldr (\x acc -> [x]:acc) [] $ map (read :: String -> Int) $ words line
-        readInput line' (n-1)
-    | otherwise = error "Error in readInput function, must read at least one line of input."
+readInput [] n = do
+    line <- getLine
+    let line' = foldr (\x acc -> [VInt x]:acc) [] $ map (read :: String -> Int) $ words line
+    readInput line' (n-1)
 readInput xs n = do 
     line <- getLine
     let line' = map (read :: String -> Int) $ words line
     let xs' = if (length xs /= length line') then (error "Error in readInput function, input is not in the correct format.") else (helper xs line')
     readInput xs' (n-1)
         where helper [] [] = []
-              helper (ys:yss) (x:xs) = (x:ys) : helper yss xs
+              helper (ys:yss) (x:xs) = (ys ++ [VInt x]) : helper yss xs
 
 
 -- Type error between Expr e1 and Expr e2, using operator String s, which uses type String t.
