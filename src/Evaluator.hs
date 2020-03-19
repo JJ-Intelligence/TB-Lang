@@ -5,11 +5,12 @@ import Lexer
 import qualified Data.Map.Strict as Map
 import qualified Data.IntMap.Lazy as MapL
 import Data.Maybe
+import System.IO (isEOF)
 import Debug.Trace
 
 -- Reserved elements of the Store.
-storedGlobalEnv = 10 -- Address of the function CallStack.
-heapStart = 11 -- Starting address of the variable/function heap (space after the reserved area).
+storedGlobalEnv = 12 -- Address of the function CallStack.
+heapStart = 20 -- Starting address of the variable/function heap (space after the reserved area).
 
 -- garbageSize = 10 -- Number of out-of-scope variables allowed in the heap before garbage collection kicks in. (NOW REDUNDANT)
 
@@ -24,7 +25,9 @@ insertReserved env store = helper ls env (MapL.insert storedGlobalEnv (GlobalEnv
                 ("get", 6, (VFunc [([VVar "n", VVar "xs"], BuiltInFunc "get" [Var "n", Var "xs"])])),
                 ("out", 7, (VFunc [([VVar "v"], BuiltInFunc "out" [Var "v"])])),
                 ("in", 8, (VFunc [([VVar "v"], BuiltInFunc "in" [Var "v"])])),
-                ("pop", 9, (VFunc [([VVar "xs"], BuiltInFunc "pop" [Var "xs"])]))]
+                ("pop", 9, (VFunc [([VVar "xs"], BuiltInFunc "pop" [Var "xs"])])),
+                ("hasElems", 10, (VFunc [([VVar "n", VVar "xs"], BuiltInFunc "hasElems" [Var "n", Var "xs"]),
+                                            ([VVar "xs"], BuiltInFunc "hasElems" [Var "xs"])]))]
           helper xs env store = foldr (\(s,a,e) (env', store') -> (Map.insert s (a,Global) env', MapL.insert a e store')) (env, store) xs
 
 -- interpret :: String -> State
@@ -186,6 +189,7 @@ step (BuiltInFunc "get" [Var num, Var list], env, store, nextAddr, kon)
 step (BuiltInFunc "pop" [Var list], env, store, nextAddr, kon)
     | getType v == TRef && ls /= Nothing = 
         case (getType (fromJust ls)) of
+
                 TList -> let (VList xs) = fromJust ls in 
                     case (length xs > 0) of
                         True -> step (Value $ head xs, env, updateStore store r (VList (tail xs)), nextAddr, kon)
@@ -201,6 +205,24 @@ step (BuiltInFunc "pop" [Var list], env, store, nextAddr, kon)
     where v = lookupVar list env store
           (VRef r) = v
           ls = MapL.lookup r store
+
+step (BuiltInFunc "hasElems" [Var num, Var stream], env, store, nextAddr, kon)
+    | getType n == TInt && n' >= 0 && getType v == TRef && st /= Nothing && getType (fromJust st) == TStream = do
+        (ys, store') <- peakStreamInput (fromJust st) n' store
+        case length ys of
+            0 -> step (Value $ VBool False, env, store', nextAddr, kon)
+            _ -> case head ys of
+                        (VInt _) -> step (Value $ VBool True, env, store', nextAddr, kon)
+                        VNone -> step (Value $ VBool False, env, store', nextAddr, kon)
+                        _ -> error "Something went wrong in the input."
+    where n = (lookupVar num env store)
+          (VInt n') = n
+          v = lookupVar stream env store
+          (VRef r) = v
+          st = MapL.lookup r store
+
+step (BuiltInFunc "hasElems" [Var stream], env, store, nextAddr, kon) = step (BuiltInFunc "hasElems" [Var "n", Var stream], env', store', nextAddr', kon)
+    where (env', store', nextAddr') = overrideEnvStore env store nextAddr "n" (VInt 1) Local
 
 -- Returning from a function.
 step (Value e1, env, store, nextAddr, ReturnFrame:kon) = return (Value e1, env, store, nextAddr, kon)
@@ -386,17 +408,29 @@ updateStore store a e1
 
 -- Takes in stream num, num of values to get from the buffer, and the current store.
 -- Returns updated store and list of values retrieved.
+peakStreamInput :: ExprValue -> Int -> Store -> IO ([ExprValue], Store)
+peakStreamInput (VStream i xs) n store = do
+    (VStream i' ys, store') <- handleStreamInput (VStream i xs) n store
+    return (take n ys, store')
+
+peakStreamInput _ _ _ = error "peakStreamInput function only takes in a VStream type."
+
+-- Takes in stream num, num of values to get from the buffer, and the current store.
+-- Returns updated store and list of values retrieved.
 dropStreamInput :: ExprValue -> Int -> Store -> IO ([ExprValue], Store)
 dropStreamInput (VStream i xs) n store = do
+    (VStream i' ys, store') <- handleStreamInput (VStream i xs) n store
+    return (take n ys, MapL.update (\x -> Just (VStream i' $ drop n ys)) (-i') store')
+
+dropStreamInput _ _ _ = error "dropStreamInput function only takes in a VStream type."
+
+handleStreamInput :: ExprValue -> Int -> Store -> IO (ExprValue, Store)
+handleStreamInput (VStream i xs) n store = do
     store' <- case length xs >= n of
                         True -> return store
                         False -> do updateStreams (n - length xs) store
 
-    let (Just (VStream i' ys)) = MapL.lookup (-i) store'
-
-    return (take n ys, MapL.update (\x -> Just (VStream i' $ drop n ys)) (-i') store')
-
-dropStreamInput _ _ _ = error "dropStreamInput function only takes in a VStream type."
+    return (fromJust $ MapL.lookup (-i) store', store')
 
 -- Input function. Reads in n values from a given sequence.
 updateStreams :: Int -> Store -> IO Store
@@ -410,18 +444,25 @@ updateStreams n store = do
 
 -- Read n lines of input into stream buffers (a list of lists).
 readInput :: [[ExprValue]] -> Int -> IO [[ExprValue]]
-readInput xs 0 = return xs
+readInput xss 0 = return xss
 readInput [] n = do
+    end <- isEOF
     line <- getLine
     let line' = foldr (\x acc -> [VInt x]:acc) [] $ map (read :: String -> Int) $ words line
-    readInput line' (n-1)
-readInput xs n = do 
+    if end then return [] else readInput line' (n-1)
+readInput xss n = do 
+    end <- isEOF
     line <- getLine
-    let line' = map (read :: String -> Int) $ words line
-    let xs' = if (length xs /= length line') then (error "Error in readInput function, input is not in the correct format.") else (helper xs line')
-    readInput xs' (n-1)
+    let line' = map ((\i -> VInt i) . (read :: String -> Int)) $ words line
+    let xss' = if (length xss /= length line') 
+        then (error "Error in readInput function, input is not in the correct format.") 
+        else (helper xss line')
+    if end 
+        then return (helper xss (replicate (length xss) VNone))
+        else readInput xss' (n-1)
+
         where helper [] [] = []
-              helper (ys:yss) (x:xs) = (ys ++ [VInt x]) : helper yss xs
+              helper (ys:yss) (x:xs) = (ys ++ [x]) : helper yss xs
 
 
 -- Type error between Expr e1 and Expr e2, using operator String s, which uses type String t.

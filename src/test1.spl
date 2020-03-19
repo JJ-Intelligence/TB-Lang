@@ -32,13 +32,13 @@
 xs = in(0); -- Ref -1,   -1 -> VStream Int []
 ys = in(1);
 
-out(ys);
+out(hasElems(ys));
 out(*ys);
 
-out(drop(2, ys));
-out(*ys);
-
+out(hasElems(4, xs));
 out(*xs);
+
+
 
 -- while (hasElems(1, xs)) {
     
