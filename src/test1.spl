@@ -29,15 +29,14 @@
 -- x -> ListRef 11 (Index 0 (Index 1 End))
 
 
-xs = in(0); -- Ref -1,   -1 -> VStream Int []
+xs = in(0);
 ys = in(1);
 
-out(hasElems(ys));
-out(*ys);
-
-out(hasElems(4, xs));
+out (drop (-1, xs));
 out(*xs);
 
+out(take (2, ys));
+out(*ys);
 
 
 -- while (hasElems(1, xs)) {

@@ -134,54 +134,32 @@ step (BuiltInFunc "length" [Var xs], env, store, nextAddr, kon)
     where v = (lookupVar xs env store)
 
 step (BuiltInFunc "head" [Var xs], env, store, nextAddr, kon)
-    | getType v == TList = let (VList xs) = v in step (Value $ head xs, env, store, nextAddr, kon)
+    | getType v == TList = let (VList xs) = v in 
+            case length xs of
+                0 -> error "In head function call, length of the list is 0."
+                _ -> step (Value $ head xs, env, store, nextAddr, kon)
     | otherwise = error "Head function must take a list as an argument."
     where v = (lookupVar xs env store)
 
 step (BuiltInFunc "tail" [Var xs], env, store, nextAddr, kon)
-    | getType v == TList = let (VList xs) = v in step (Value $ VList (tail xs), env, store, nextAddr, kon)
+    | getType v == TList = let (VList xs) = v in 
+            case length xs of
+                0 -> error "In head function call, length of the list is 0."
+                _ -> step (Value $ VList (tail xs), env, store, nextAddr, kon)
     | otherwise = error "Tail function must take a list as an argument."
     where v = (lookupVar xs env store)
 
-step (BuiltInFunc "drop" [Var num, Var list], env, store, nextAddr, kon)
-    | getType n == TInt = case getType xs of
+step s@(BuiltInFunc "drop" [Var num, Var list], env, store, nextAddr, kon) = handleTakeDrop (drop) s
+step s@(BuiltInFunc "take" [Var num, Var list], env, store, nextAddr, kon) = handleTakeDrop (take) s
 
-            TList -> let (VList xs') = xs in
-                    case (length xs' >= n') of
-                        True -> step (Value $ VList (drop n' xs'), env, store, nextAddr, kon)
-                        False -> error "Plz make list bigger."
-
-            TRef -> case (MapL.lookup r store) of 
-                    Just (VList ys) -> case (length ys >= n') of 
-                            True -> let store' = updateStore store r (VList (drop n' ys)) in 
-                                        step (Value $ VList (drop n' ys), env, store', nextAddr, kon)
-                            False -> error "Plz make list bigger."
-
-                    Just (VStream i ys) -> do
-                        (zs, store') <- dropStreamInput (VStream i ys) n' store
-                        step (Value $ VList zs, env, store', nextAddr, kon)
-
-                    _ -> error $ "Drop function only takes a reference to a list or stream."
-
-    | otherwise = error $ "Drop function takes in an int and a list. "
-    where n = (lookupVar num env store)
-          (VInt n') = n
-          xs = (lookupVar list env store)
-          (VRef r) = xs
-
-step (BuiltInFunc "take" [Var num, Var list], env, store, nextAddr, kon) -- TODO - check length of the List
-    | getType n == TInt && getType xs == TList = let (VList xs') = xs in 
-                                                    step (Value $ VList (take n' xs'), env, store, nextAddr, kon)
-    | otherwise = error "Take function takes in an int and a list."
-    where n = (lookupVar num env store)
-          (VInt n') = n
-          xs = (lookupVar list env store)
 
 step (BuiltInFunc "get" [Var num, Var list], env, store, nextAddr, kon)
     | getType n == TInt && getType xs == TList = let (VList xs') = xs; (VInt n') = n in
-            case n' >= (length xs') of
-                True -> error $ "Get function index is larger than the length of the list."
-                False -> step (Value $ xs'!!n', env, store, nextAddr, kon)
+            if n' < 0 
+                then error "Get function can't take in a negative." 
+                else case n' >= (length xs') of
+                        True -> error $ "Get function index is larger than the length of the list."
+                        False -> step (Value $ xs'!!n', env, store, nextAddr, kon)
     | otherwise = error "Get function takes in a list and an int"
     where n = (lookupVar num env store)
           xs = (lookupVar list env store)
@@ -248,9 +226,13 @@ step (Op (CompOp op e1 e2), env, store, nextAddr, kon) = step (e1, env, store, n
 step (Value e1, env, store, nextAddr, (HBinOp (BinCompOp op e2 env')):kon) = step (e2, env', store, nextAddr, (BinOpH $ BinCompOp op (Value e1) env):kon)
 
 -- Boolean &&, || operations.
-step (Value (VBool b'), env', store, nextAddr, (BinOpH (BinCompOp And (Value (VBool b)) env)):kon) = step (Value $ VBool $ b && b', env, store, nextAddr, kon)
+step (Value (VBool b'), env', store, nextAddr, (BinOpH (BinCompOp And (Value (VBool b)) env)):kon)
+    | b' = step (Value $ VBool $ b && b', env, store, nextAddr, kon)
+    | otherwise = step (Value $ VBool False, env, store, nextAddr, kon)
 step (Value e2, env', store, nextAddr, (BinOpH (BinCompOp And (Value e1) env)):kon) = typeError (Value e1) (show And) (Value e2) "Boolean"
-step (Value (VBool b'), env', store, nextAddr, (BinOpH (BinCompOp Or (Value (VBool b)) env)):kon) = step (Value $ VBool $ b || b', env, store, nextAddr, kon)
+step (Value (VBool b'), env', store, nextAddr, (BinOpH (BinCompOp Or (Value (VBool b)) env)):kon) 
+    | b' = step (Value $ VBool True, env, store, nextAddr, kon)
+    | otherwise = step (Value $ VBool $ b || b', env, store, nextAddr, kon)
 step (Value e2, env', store, nextAddr, (BinOpH (BinCompOp Or (Value e1) env)):kon) = typeError (Value e1) (show Or) (Value e2) "Boolean"
 
 -- Comparison ==, <, > operations.
@@ -299,6 +281,35 @@ step s@(_, _, _, _, [Done]) = return s
 -- No defined step for the current State.
 step s@(exp, env, store, nextAddr, kon) = error $ "ERROR evaluating expression " ++ (show s) ++ ", no CESK step defined."
 
+-- Take and Drop functions (as they're exactly the same apart from the Haskell function).
+handleTakeDrop :: (Int -> [ExprValue] -> [ExprValue]) -> State -> IO State
+handleTakeDrop func (BuiltInFunc name [Var num, Var list], env, store, nextAddr, kon)
+    | getType n == TInt = case n' < 0 of
+            True -> error "Drop/tail functions must take a positive int."
+            False -> case getType xs of
+
+                        TList -> let (VList xs') = xs in
+                                case (length xs' >= n') of
+                                    True -> step (Value $ VList (func n' xs'), env, store, nextAddr, kon)
+                                    False -> error "Plz make list bigger."
+
+                        TRef -> case (MapL.lookup r store) of 
+                                Just (VList ys) -> case (length ys >= n') of 
+                                        True -> let store' = updateStore store r (VList (func n' ys)) in 
+                                                    step (Value $ VList (func n' ys), env, store', nextAddr, kon)
+                                        False -> error "Plz make list bigger."
+
+                                Just (VStream i ys) -> do
+                                    (zs, store') <- dropStreamInput (VStream i ys) n' store
+                                    step (Value $ VList zs, env, store', nextAddr, kon)
+
+                                _ -> error $ "Drop/tail functions only takes a reference to a list or stream."
+
+    | otherwise = error $ "Drop/tail functions takes in an int and a list. "
+    where n = (lookupVar num env store)
+          (VInt n') = n
+          xs = (lookupVar list env store)
+          (VRef r) = xs
 
 -- Evaluate arguments to an ExprValue.
 evaluateArgs :: Parameters -> Environment -> Store -> Address -> [ExprValue] -> IO ([ExprValue], Store)
