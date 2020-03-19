@@ -16,7 +16,7 @@ heapStart = 10 -- Starting address of the variable/function heap (space after th
 -- Insert reserved items into the Environment and Store.
 insertReserved :: Environment -> Store -> (Environment, Store)
 insertReserved env store = helper ls env (MapL.insert storedGlobalEnv (GlobalEnv Map.empty) store)
-    where ls = [("tail", 1, (VFunc [([VVar "xs"], BuiltInFunc "tail" [Var "xs"])])), 
+    where ls = [("tail", 1, (VFunc [([VVar "xs"], BuiltInFunc "tail" [Var "xs"])])),
                 ("head", 2, (VFunc [([VVar "xs"], BuiltInFunc "head" [Var "xs"])])),
                 ("length", 3, (VFunc [([VVar "xs"], BuiltInFunc "length" [Var "xs"])])),
                 ("out", 4, (VFunc [([VVar "v"], BuiltInFunc "out" [Var "v"])])),
@@ -28,7 +28,7 @@ insertReserved env store = helper ls env (MapL.insert storedGlobalEnv (GlobalEnv
 
 -- Start the evaluator by passing it an Expression (from the Parser).
 startEvaluator :: Expr -> IO ()
-startEvaluator e = do 
+startEvaluator e = do
     s <- step (e, env, store, heapStart, [Done])
     putStrLn "\nFinished evaluation.\n"
         where (env, store) = insertReserved (Map.empty) (MapL.empty)
@@ -184,6 +184,15 @@ step (Value (VBool b), env, store, nextAddr, (HTerOp (TerWhileOp c e1)):kon)
     | b = step (e1, env, store, nextAddr, (TerOpH $ TerWhileOp c e1):kon)
     | otherwise = step (Value VNone, env, store, nextAddr, kon)
 step (Value v, env, store, nextAddr, (TerOpH (TerWhileOp c e1)):kon) = step (c, env, store, nextAddr, (HTerOp $ TerWhileOp c e1):kon)
+
+-- For loop.
+step (For i c n e, env, store, nextAddr, kon) = step (i, env, store, nextAddr, (TerOpH $ TerForOp i c n e):kon)
+step (Value _, env, store, nextAddr, (HTerOp (TerForOp i c n e)):kon) = step (n, env, store, nextAddr, (TerOpH $ TerForOp i c n e):kon)
+step (Value _, env, store, nextAddr, (TerOpH (TerForOp i c n e)):kon) = step (c, env, store, nextAddr, (TerOp_H $ TerForOp i c n e):kon)
+step (Value (VBool b), env, store, nextAddr, (TerOp_H (TerForOp i c n e)):kon)
+    | b = step (e, env, store, nextAddr, (TerOp__H $ TerForOp i c n e):kon)
+    | otherwise = step (Value VNone, env, store, nextAddr, kon)
+step (Value v, env, store, nextAddr, (TerOp__H (TerForOp i c n e)):kon) = step (n, env, store, nextAddr, (TerOpH $ TerForOp i c n e):kon)
 
 -- End of evaluation.
 step s@(_, _, _, _, [Done]) = return s

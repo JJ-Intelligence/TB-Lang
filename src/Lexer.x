@@ -20,6 +20,7 @@ tokens :-
     while                               { \p s -> TokenWhile p }
     func                                { \p s -> TokenFuncDef p }
     return                              { \p s -> TokenReturn p }
+    for                                 { \p s -> TokenFor p }
 
     \;                                  { \p s -> TokenSeq p }
     \(                                  { \p s -> TokenOpenParen p }
@@ -62,6 +63,7 @@ data Token =  TokenIf               {pos :: AlexPosn}
             | TokenElse             {pos :: AlexPosn}
 
             | TokenWhile            {pos :: AlexPosn}
+            | TokenFor              {pos :: AlexPosn}
 
             | TokenFuncDef          {pos :: AlexPosn}
             | TokenReturn           {pos :: AlexPosn}
