@@ -222,18 +222,13 @@ step (Value (VBool b), env, store, nextAddr, (HTerOp (TerWhileOp c e1)):kon)
 step (Value v, env, store, nextAddr, (TerOpH (TerWhileOp c e1)):kon) = step (c, env, store, nextAddr, (HTerOp $ TerWhileOp c e1):kon)
 
 -- For loop.
-step (For i c n e, env, store, nextAddr, kon) = step (i, env, store, nextAddr, (HTerOp $ TerForInit i c n e):kon)
-step (Value _, env, store, nextAddr, (HTerOp (TerForInit i c n e)):kon) = step (c, env, store, nextAddr, (TerOpH $ TerForInit i c n e):kon)
-step (Value (VBool b), env, store, nextAddr, (TerOpH (TerForInit i c n e)):kon)
-    | b = step (e, env, store, nextAddr, (TerOp_H $ TerForInit i c n e):kon)
+step (For i c n e, env, store, nextAddr, kon) = step (i, env, store, nextAddr, (HTerOp (TerForInit i c n e)):kon)
+step (Value _, env, store, nextAddr, (HTerOp (TerForInit i c n e)):kon) = step (c, env, store, nextAddr, (HTerOp (TerForOp c n e)):kon) -- Initialised vars.
+step (Value (VBool b), env, store, nextAddr, (HTerOp (TerForOp c n e)):kon) -- Evaluated condition.
+    | b = step (e, env, store, nextAddr, (TerOp_H (TerForOp c n e)):kon)
     | otherwise = step (Value VNone, env, store, nextAddr, kon)
-step (Value _, env, store, nextAddr, (TerOp_H (TerForInit i c n e)):kon) = step (n, env, store, nextAddr, (HTerOp $ TerForOp i c n e):kon)
-
-step (Value _, env, store, nextAddr, (HTerOp (TerForOp i c n e)):kon) = step (c, env, store, nextAddr, (TerOpH $ TerForOp i c n e):kon)
-step (Value (VBool b), env, store, nextAddr, (TerOpH (TerForOp i c n e)):kon)
-    | b = step (e, env, store, nextAddr, (TerOp_H $ TerForOp i c n e):kon)
-    | otherwise = step (Value VNone, env, store, nextAddr, kon)
-step (Value _, env, store, nextAddr, (TerOp_H (TerForOp i c n e)):kon) = step (n, env, store, nextAddr, (HTerOp $ TerForOp i c n e):kon)
+step (Value _, env, store, nextAddr, (TerOp_H (TerForOp c n e)):kon) = step (n, env, store, nextAddr, (TerOpH (TerForOp c n e)):kon) -- Evaluated expression
+step (Value _, env, store, nextAddr, (TerOpH (TerForOp c n e)):kon) = step (c, env, store, nextAddr, (HTerOp (TerForOp c n e)):kon) -- Incremented vars.
 
 -- End of evaluation.
 step s@(_, _, _, _, [Done]) = return s
