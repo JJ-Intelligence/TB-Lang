@@ -1,12 +1,4 @@
 
-func foo (x) = {
-    *x = 5;
-    out(x);
-};
-
-y = 0;
-k = &y;
-
-foo(k);
-
-out(y);
+for (i = 0; i < 10; i = i + 1) {
+    out (i);
+}

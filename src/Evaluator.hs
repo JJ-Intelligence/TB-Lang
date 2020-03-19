@@ -186,11 +186,13 @@ step (Value (VBool b), env, store, nextAddr, (HTerOp (TerWhileOp c e1)):kon)
 step (Value v, env, store, nextAddr, (TerOpH (TerWhileOp c e1)):kon) = step (c, env, store, nextAddr, (HTerOp $ TerWhileOp c e1):kon)
 
 -- For loop.
---step (While c e1, env, store, nextAddr, kon) = step (c, env, store, nextAddr, (HTerOp $ TerWhileOp c e1):kon)
---step (Value (VBool b), env, store, nextAddr, (HTerOp (TerWhileOp c e1)):kon)
---    | b = step (e1, env, store, nextAddr, (TerOpH $ TerWhileOp c e1):kon)
---    | otherwise = (Value VNone, env, store, nextAddr, kon)
---step (Value v, env, store, nextAddr, (TerOpH (TerWhileOp c e1)):kon) = step (c, env, store, nextAddr, (HTerOp $ TerWhileOp c e1):kon)
+step (For i c n e, env, store, nextAddr, kon) = step (i, env, store, nextAddr, (HTerOp $ TerForOp i c n e):kon)
+step (Value v, env, store, nextAddr, (HTerOp (TerForOp i c n e)):kon) = step (n, env, store, nextAddr, (TerOpH $ TerForOp i c n e):kon)
+step (Value v, env, store, nextAddr, (TerOpH (TerForOp i c n e)):kon) = step (c, env, store, nextAddr, (TerOp_H $ TerForOp i c n e):kon)
+step (Value (VBool b), env, store, nextAddr, (TerOp_H (TerForOp i c n e)):kon)
+    | b = step (e, env, store, nextAddr, (TerOp__H $ TerForOp i c n e):kon)
+    | otherwise = step (Value VNone, env, store, nextAddr, kon)
+step (Value v, env, store, nextAddr, (TerOp__H (TerForOp i c n e)):kon) = step (n, env, store, nextAddr, (TerOpH $ TerForOp i c n e):kon)
 
 -- End of evaluation.
 step s@(_, _, _, _, [Done]) = return s

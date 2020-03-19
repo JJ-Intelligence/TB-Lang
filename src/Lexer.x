@@ -63,6 +63,7 @@ data Token =  TokenIf               {pos :: AlexPosn}
             | TokenElse             {pos :: AlexPosn}
 
             | TokenWhile            {pos :: AlexPosn}
+            | TokenFor              {pos :: AlexPosn}
 
             | TokenFuncDef          {pos :: AlexPosn}
             | TokenReturn           {pos :: AlexPosn}
