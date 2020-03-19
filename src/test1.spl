@@ -1,12 +1,14 @@
 
-func foo (x) = {
-    *x = 5;
-    out(x);
-};
 
-y = 0;
-k = &y;
 
-foo(k);
 
-out(y);
+
+i = [1,2,3];
+k = &i;
+out(pop(k));
+out(i);
+
+
+-- Order of arguments is for some reason reverse of 
+-- order of parameters!
+-- Check eval args function

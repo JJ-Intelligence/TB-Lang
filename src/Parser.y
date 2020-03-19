@@ -79,7 +79,7 @@ E : E ';' E                         { Seq $1 $3 }
   | L                               { $1 }
 
 V : '*'var '=' E                    { DefPointerVar $2 $4 }
-  | '*'var                          { PointerVar $2 }
+  | '*'var %prec POINT              { PointerVar $2 }
   | '&'var                          { AddressVar $2 }
   | var '=' E                       { DefVar $1 $3 }
   | var                             { Var $1 }

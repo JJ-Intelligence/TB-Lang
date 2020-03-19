@@ -18,9 +18,13 @@ insertReserved :: Environment -> Store -> (Environment, Store)
 insertReserved env store = helper ls env (MapL.insert storedGlobalEnv (GlobalEnv Map.empty) store)
     where ls = [("tail", 1, (VFunc [([VVar "xs"], BuiltInFunc "tail" [Var "xs"])])), 
                 ("head", 2, (VFunc [([VVar "xs"], BuiltInFunc "head" [Var "xs"])])),
-                ("length", 3, (VFunc [([VVar "xs"], BuiltInFunc "length" [Var "xs"])])),
-                ("out", 4, (VFunc [([VVar "v"], BuiltInFunc "out" [Var "v"])])),
-                ("in", 5, (VFunc [([VVar "v"], BuiltInFunc "in" [Var "v"])]))]
+                ("drop", 3, (VFunc [([VVar "n", VVar "xs"], BuiltInFunc "drop" [Var "n", Var "xs"])])),
+                ("take", 4, (VFunc [([VVar "n", VVar "xs"], BuiltInFunc "take" [Var "n", Var "xs"])])),
+                ("length", 5, (VFunc [([VVar "xs"], BuiltInFunc "length" [Var "xs"])])),
+                ("get", 6, (VFunc [([VVar "n", VVar "xs"], BuiltInFunc "get" [Var "n", Var "xs"])])),
+                ("out", 7, (VFunc [([VVar "v"], BuiltInFunc "out" [Var "v"])])),
+                ("in", 8, (VFunc [([VVar "v"], BuiltInFunc "in" [Var "v"])])),
+                ("pop", 9, (VFunc [([VVar "xs"], BuiltInFunc "pop" [Var "xs"])]))]
           helper xs env store = foldr (\(s,a,e) (env', store') -> (Map.insert s (a,Global) env', MapL.insert a e store')) (env, store) xs
 
 -- interpret :: String -> State
@@ -95,11 +99,11 @@ step (Value e1, env, store, nextAddr, FuncBlockFrame:kon) = step (Value VNone, e
 
 -- User-defined function calls.
 step (FuncCall s ps, env, store, nextAddr, kon) = do
-    args <- evaluateArgs ps env store nextAddr []
-    let (e1, env', store', nextAddr') = handleFuncArgs args env store nextAddr s -- Pattern match
-    (Value e2, _, store'', _, _) <- step (e1, env', store', nextAddr', ReturnFrame:kon) -- Recurse into function call.
+    (args, store') <- evaluateArgs ps env store nextAddr []
+    let (e1, env', store'', nextAddr') = handleFuncArgs args env store' nextAddr s -- Pattern match
+    (Value e2, _, store''', _, _) <- step (e1, env', store'', nextAddr', ReturnFrame:kon) -- Recurse into function call.
 
-    step (Value e2, env, store'', nextAddr, kon) -- Continue after function call returns.
+    step (Value e2, env, store''', nextAddr, kon) -- Continue after function call returns.
 
 -- Built-in functions.
 -- step (BuiltInFunc "in" [Var s], env, store, nextAddr, kon) = return (Value v, env, store, nextAddr, (FuncCallFrame "in"):kon)
@@ -124,6 +128,38 @@ step (BuiltInFunc "tail" [Var xs], env, store, nextAddr, kon)
     | getType v == TList = let (VList xs) = v in step (Value $ VList (tail xs), env, store, nextAddr, kon)
     | otherwise = error "Tail function must take a list as an argument."
     where v = (lookupVar xs env store)
+
+step (BuiltInFunc "drop" [Var num, Var list], env, store, nextAddr, kon)
+    | getType n == TInt && getType xs == TList = let (VList xs') = xs; (VInt n') = n in 
+                                                    step (Value $ VList (drop n' xs'), env, store, nextAddr, kon)
+    | otherwise = error $ "Drop function takes in an int and a list. "
+    where n = (lookupVar num env store)
+          xs = (lookupVar list env store)
+
+step (BuiltInFunc "take" [Var num, Var list], env, store, nextAddr, kon)
+    | getType n == TInt && getType xs == TList = let (VList xs') = xs; (VInt n') = n in 
+                                                    step (Value $ VList (take n' xs'), env, store, nextAddr, kon)
+    | otherwise = error "Take function takes in an int and a list."
+    where n = (lookupVar num env store)
+          xs = (lookupVar list env store)
+
+step (BuiltInFunc "get" [Var num, Var list], env, store, nextAddr, kon)
+    | getType n == TInt && getType xs == TList = let (VList xs') = xs; (VInt n') = n in
+            case n' >= (length xs') of
+                True -> error $ "Get function index is larger than the length of the list."
+                False -> step (Value $ xs'!!n', env, store, nextAddr, kon)
+    | otherwise = error "Get function takes in a list and an int"
+    where n = (lookupVar num env store)
+          xs = (lookupVar list env store)
+
+step (BuiltInFunc "pop" [Var list], env, store, nextAddr, kon)
+    | getType v /= TRef || ls == Nothing || getType (fromJust ls) /= TList || length xs < 1 = error $ "Pop function takes in a list."
+    | otherwise = step (Value $ head xs, env, store', nextAddr, kon)
+    where v = lookupVar list env store
+          (VRef r) = v
+          ls = MapL.lookup r store
+          (VList xs) = fromJust ls
+          store' = updateStore store r (VList (tail xs))
 
 -- Returning from a function.
 step (Value e1, env, store, nextAddr, ReturnFrame:kon) = return (Value e1, env, store, nextAddr, kon)
@@ -193,11 +229,11 @@ step s@(exp, env, store, nextAddr, kon) = error $ "ERROR evaluating expression "
 
 
 -- Evaluate arguments to an ExprValue.
-evaluateArgs :: Parameters -> Environment -> Store -> Address -> [ExprValue] -> IO [ExprValue]
-evaluateArgs FuncParamEnd env store nextAddr ls = return ls
+evaluateArgs :: Parameters -> Environment -> Store -> Address -> [ExprValue] -> IO ([ExprValue], Store)
+evaluateArgs FuncParamEnd env store nextAddr ls = return (ls, store)
 evaluateArgs (FuncParam e1 e2) env store nextAddr ls = do
-    (Value e1',_,_,_,_) <- step (e1, env, store, nextAddr, [Done])
-    evaluateArgs e2 env store nextAddr (e1':ls)
+    (Value e1',_,store',_,_) <- step (e1, env, store, nextAddr, [Done])
+    evaluateArgs e2 env store' nextAddr (ls ++ [e1'])
 
 
 -- Pattern matches a function parameters with some given arguments, returning the functions Expr value, as well as updated Env, Store, and next Address.
