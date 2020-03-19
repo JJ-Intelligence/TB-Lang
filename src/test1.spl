@@ -1,12 +1,15 @@
 
 
+for ({i = 0; j = 0}; i+j < 10; {i = i + 1; j = j + 2}) {
+    out(i);
+    out(j);
+};
 
 
-
-i = [1,2,3];
-k = &i;
-out(pop(k));
-out(i);
+-- i = [1,2,3];
+-- k = &i;
+-- out(pop(k));
+-- out(i);
 
 
 -- Order of arguments is for some reason reverse of 
