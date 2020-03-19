@@ -28,7 +28,6 @@ import Expression
 
     '+'    { TokenPlus _ }
     '-'    { TokenMinus _ }
-    '*'    { TokenMultiply _ }
     '/'    { TokenDivide _ }
     '^'    { TokenExponent _ }
     '%'    { TokenModulus _ }
@@ -39,6 +38,9 @@ import Expression
     '>'    { TokenGreaterThan _ }
     '='    { TokenEquals _ }
     ':'    { TokenCons _ }
+
+    '*'    { TokenStar _ }
+    '&'    { TokenAddress _ }
 
     int    { TokenInt $$ _ }
     bool   { TokenBool $$ _ }
@@ -55,7 +57,8 @@ import Expression
 %left '+' '-'
 %left '*' '/' '%'
 %left NEG
-%right '^'
+%right '^' 
+%right POINT '&'
 %%
 
 E : E ';' E                         { Seq $1 $3 }
@@ -70,12 +73,17 @@ E : E ';' E                         { Seq $1 $3 }
   | return '(' ')'                  { Return (Literal ENone) }
   | var '(' P ')'                   { FuncCall $1 $3 }
   | var '('')'                      { FuncCall $1 FuncParamEnd }
-  | var '=' E                       { DefVar $1 $3 }
-  | var                             { Var $1 }
+  | V                               { $1 }
   | B                               { $1 }
   | O                               { $1 }
   | C                               { $1 }
   | L                               { $1 }
+
+V : '*'var '=' E                    { DefPointerVar $2 $4 }
+  | '*'var                          { PointerVar $2 }
+  | '&'var                          { AddressVar $2 }
+  | var '=' E                       { DefVar $1 $3 }
+  | var                             { Var $1 }
 
 P : E ',' P                         { FuncParam $1 $3 }
   | E                               { FuncParam $1 FuncParamEnd }

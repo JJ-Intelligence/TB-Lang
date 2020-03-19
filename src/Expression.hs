@@ -33,7 +33,8 @@ data Frame = HBinOp BinOpFrame
            | HTerOp TerOpFrame
            | TerOpH TerOpFrame
            | DefVarFrame String Environment
-           | FuncCallFrame String Environment
+           | DefPointerVarFrame String Environment
+           | FuncCallFrame String
            | ReturnFrame
            | FuncBlockFrame
            | Done 
@@ -49,6 +50,7 @@ data Type = TInt
           | TBool 
           | TEmpty 
           | TList
+          | TRef
           | TConflict deriving (Eq)
 
 instance Show Type where 
@@ -56,6 +58,7 @@ instance Show Type where
     show TBool = "Boolean"
     show TEmpty = ""
     show TList = "[]" 
+    show TRef = "Reference"
     show TConflict = "Conflict"
 
 -- **Expression type returned by Parser**
@@ -86,8 +89,10 @@ data ExprValue = VInt Int
                | VBool Bool
                | VVar String
                | VList [ ExprValue ]
+               | VStream Int [ ExprValue ]
                | VNone
                | VFunc [ ([ExprValue], Expr) ]
+               | VRef Address
                | GlobalEnv Environment
                deriving (Eq)
 
@@ -101,8 +106,10 @@ instance Show ExprValue where
   --   where helper [] = " "
   --         helper [y] = (show y) ++ " "
   --         helper (x:y:xs) = (show x) ++ " " ++ (helper (y:xs))
+  show (VStream n xs) = "VStream " ++ (show n) ++ " " ++ (show xs)
   show VNone = "null"
   show (VFunc xs) = "VFunc " ++ (show xs)
+  show (VRef n) = "VRef " ++ (show n)
   show (GlobalEnv env) = "GlobalEnv " ++ (show env)
   show (VVar s) = "Var " ++ s
 
@@ -151,12 +158,12 @@ instance Show ExprMath where
 
 data Parameters = FuncParam Expr Parameters
                 | FuncParamEnd
-                deriving (Eq)
+                deriving (Eq, Show)
 
-instance Show Parameters where
-  show (FuncParam e1 FuncParamEnd) = show e1
-  show (FuncParam e1 e2) = (show e1) ++ ", " ++ (show e2)
-  show (FuncParamEnd) = ""
+-- instance Show Parameters where
+--   show (FuncParam e1 FuncParamEnd) = show e1
+--   show (FuncParam e1 e2) = (show e1) ++ ", " ++ (show e2)
+--   show (FuncParamEnd) = ""
 
 data Expr = If Expr Expr (Maybe ExprElif)
           | While Expr Expr
@@ -167,23 +174,31 @@ data Expr = If Expr Expr (Maybe ExprElif)
           | Literal ExprLiteral
           | Value ExprValue
           | Op BinOp
+          | DefPointerVar String Expr
+          | PointerVar String
+          | AddressVar String
           | DefVar String Expr
           | Var String
           | Seq Expr Expr
           | FuncBlock Expr
-          deriving (Eq)
+          | BuiltInFunc String [Expr]
+          deriving (Eq, Show)
 
-instance Show Expr where
-  show (If c e1 Nothing) = "if (" ++ (show c) ++ ") {\n" ++ (show e1) ++ "\n}"
-  show (If c e1 (Just e2)) = "if (" ++ (show c) ++ ") {\n" ++ (show e1) ++ "\n} " ++ (show e2)
-  show (While c e1) = "while (" ++ (show c) ++ ") {\n" ++ (show e1) ++ "\n} "
-  show (DefVar s (Func ps e1)) = "func " ++ s ++ " (" ++ (show ps) ++ ") = {\n" ++ (show e1) ++ "\n}" 
-  show (FuncCall s ps)  = s ++ "(" ++ (show ps) ++ ")"
-  show (Return e1) = "return " ++ (show e1)
-  show (Literal l) = show l
-  show (Value v) = show v
-  show (Op op) = show op
-  show (DefVar s e1) = s ++ " = " ++ (show e1)
-  show (Var s) = s
-  show (Seq e1 e2) = (show e1) ++ ";\n" ++ (show e2)
-  show (FuncBlock e1) = "{" ++ (show e1) ++ "}"
+-- instance Show Expr where
+--   show (If c e1 Nothing) = "if (" ++ (show c) ++ ") {\n" ++ (show e1) ++ "\n}"
+--   show (If c e1 (Just e2)) = "if (" ++ (show c) ++ ") {\n" ++ (show e1) ++ "\n} " ++ (show e2)
+--   show (While c e1) = "while (" ++ (show c) ++ ") {\n" ++ (show e1) ++ "\n} "
+--   show (DefVar s (Func ps e1)) = "func " ++ s ++ " (" ++ (show ps) ++ ") = {\n" ++ (show e1) ++ "\n}"
+--   show (FuncCall s ps)  = s ++ "(" ++ (show ps) ++ ")"
+--   show (Return e1) = "return " ++ (show e1)
+--   show (Literal l) = show l
+--   show (Value v) = show v
+--   show (Op op) = show op
+--   show (DefPointerVar s e) = "*" ++ s ++ " = " ++ (show e)
+--   show (PointerVar s) = "*" ++ s
+--   show (AddressVar s) = "&" ++ s
+--   show (DefVar s e1) = s ++ " = " ++ (show e1)
+--   show (Var s) = s
+--   show (Seq e1 e2) = (show e1) ++ ";\n" ++ (show e2)
+--   show (FuncBlock e1) = "{" ++ (show e1) ++ "}"
+--   show (BuiltInFunc s _) = s

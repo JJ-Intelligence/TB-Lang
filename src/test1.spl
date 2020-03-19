@@ -1,36 +1,12 @@
--- Challenge 1, solution 1
-func solve ([], bs) = []; 
-func solve (a:[], bs) = []; 
-func solve (x:y:as, z:bs) = x : y : z : solve (as, bs);
 
-func buildInput (0) = [];
-func buildInput (c) = 1 : buildInput (c-1);
+func foo (x) = {
+    *x = 5;
+    out(x);
+};
 
--- Building/simulating the inputs.
--- x = 0;
--- as = [];
--- bs = [];
--- while ( x < 1000000) {
---     x = x + 1;
---     as = 1:as;
---     -- bs = 2:bs;
--- };
+y = 0;
+k = &y;
 
--- as = buildInput (1000000);
--- bs = buildInput (2, 1000000);
+foo(k);
 
--- out(length (as));
-
--- solve (as, bs);
-
-func foo (x, y) = x(y);
-out(foo(func l (e)=e+2, 3));
-
--- TODO:
--- call-by-reference - &xs gets the address of xs, and can be used to pass into functions (like C)
--- pop - remove item from a list and return it
--- peek - look at the item from the top of the list
--- drop - drop n items from the list
--- take - take n items from the list
-
--- add pre-defined functions to Env and Store so we can pass them as higher-order functions.
+out(y);
