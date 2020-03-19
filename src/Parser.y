@@ -96,6 +96,7 @@ EElif : elif '(' E ')' B EElif      { Elif $3 $5 (Just $6) }
 
 -- Function block.
 B : '{' E '}'                       { FuncBlock $2 }
+  | '{' '}'                         { Literal ENone }
   | '(' E ')'                       { $2 }
 
 -- Binary operations.
