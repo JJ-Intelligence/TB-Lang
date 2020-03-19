@@ -13,6 +13,7 @@ import Expression
     else   { TokenElse _ }
 
     while  { TokenWhile _ }
+    for    { TokenFor _ }
 
     func   { TokenFuncDef _ }
     return { TokenReturn _ }
@@ -66,6 +67,7 @@ E : E ';' E                         { Seq $1 $3 }
   | while '(' E ')' B               { While $3 $5 }
   | if '(' E ')' B EElif            { If $3 $5 (Just $6) }
   | if '(' E ')' B                  { If $3 $5 Nothing }
+  | for '(' E ';' E ';' E ')' B     { For $3 $5 $7 $9 }
   | func var '(' P ')' '=' E        { DefVar $2 (Func $4 $7) }
   | func var '(' ')' '=' E          { DefVar $2 (Func FuncParamEnd $6) }
   | return '(' E ')'                { Return $3 }
