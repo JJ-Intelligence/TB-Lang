@@ -90,7 +90,11 @@ step (Var s, env, store, nextAddr, kon) = step (Value $ lookupVar s env store, e
 step (PointerVar s, env, store, nextAddr, kon) = step (Value $ lookupPointerVar s env store, env, store, nextAddr, kon)
 
 -- Getting the address for an addressed variable.
-step (AddressVar s, env, store, nextAddr, kon) = step (Value $ VRef $ lookupAddr s env, env, store, nextAddr, kon)
+step (AddressExpr (Var s), env, store, nextAddr, kon) = step (Value $ VRef $ lookupAddr s env, env, store, nextAddr, kon)
+step (AddressExpr e1, env, store, nextAddr, kon) = step (e1, env, store, nextAddr, AddressExprFrame:kon)
+step (Value e1, env, store, nextAddr, AddressExprFrame:kon) = step (Value $ VRef $ nextAddr, env, store', nextAddr+1, kon)
+    where store' = updateStore store nextAddr e1
+
 
 -- Function blocks ({ Expr }), which must have a 'return' statement.
 step (FuncBlock e1, env, store, nextAddr, kon) = step (e1, env, store, nextAddr, FuncBlockFrame:kon)

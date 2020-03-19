@@ -36,6 +36,7 @@ data Frame = HBinOp BinOpFrame
            | TerOp_H TerOpFrame
            | DefVarFrame String Environment
            | DefPointerVarFrame String Environment
+           | AddressExprFrame
            | FuncCallFrame String
            | ReturnFrame
            | FuncBlockFrame
@@ -178,7 +179,7 @@ data Expr = If Expr Expr (Maybe ExprElif)
           | Op BinOp
           | DefPointerVar String Expr
           | PointerVar String
-          | AddressVar String
+          | AddressExpr Expr
           | DefVar String Expr
           | Var String
           | Seq Expr Expr

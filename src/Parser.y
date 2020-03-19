@@ -74,6 +74,7 @@ E : E ';' E                         { Seq $1 $3 }
   | return '(' ')'                  { Return (Literal ENone) }
   | var '(' P ')'                   { FuncCall $1 $3 }
   | var '('')'                      { FuncCall $1 FuncParamEnd }
+  | '&'E                            { AddressExpr $2 }
   | V                               { $1 }
   | B                               { $1 }
   | O                               { $1 }
@@ -82,7 +83,6 @@ E : E ';' E                         { Seq $1 $3 }
 
 V : '*'var '=' E                    { DefPointerVar $2 $4 }
   | '*'var %prec POINT              { PointerVar $2 }
-  | '&'var                          { AddressVar $2 }
   | var '=' E                       { DefVar $1 $3 }
   | var                             { Var $1 }
 
