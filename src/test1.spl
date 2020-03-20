@@ -28,15 +28,25 @@
 
 -- x -> ListRef 11 (Index 0 (Index 1 End))
 
+setIn([1,2]);
 
-xs = in(0);
+-- xs = in(0);
+ps = in(0);
 ys = in(1);
+xs = in(2);
 
-out (drop (-1, xs));
+out (drop (1, xs));
 out(*xs);
 
 out(take (2, ys));
 out(*ys);
+
+out (*ps);
+
+setIn([0,1,2]);
+
+out(drop (1, ys));
+out(*ps);
 
 
 -- while (hasElems(1, xs)) {

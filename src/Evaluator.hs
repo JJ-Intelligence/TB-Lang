@@ -5,11 +5,13 @@ import Lexer
 import qualified Data.Map.Strict as Map
 import qualified Data.IntMap.Lazy as MapL
 import Data.Maybe
+import Data.List
 import System.IO (isEOF)
 import Debug.Trace
 
 -- Reserved elements of the Store.
 storedGlobalEnv = 12 -- Address of the function CallStack.
+inputStreamsToRead = 13
 heapStart = 20 -- Starting address of the variable/function heap (space after the reserved area).
 
 -- garbageSize = 10 -- Number of out-of-scope variables allowed in the heap before garbage collection kicks in. (NOW REDUNDANT)
@@ -25,8 +27,9 @@ insertReserved env store = helper ls env (MapL.insert storedGlobalEnv (GlobalEnv
                 ("get", 6, (VFunc [([VVar "n", VVar "xs"], BuiltInFunc "get" [Var "n", Var "xs"])])),
                 ("out", 7, (VFunc [([VVar "v"], BuiltInFunc "out" [Var "v"])])),
                 ("in", 8, (VFunc [([VVar "v"], BuiltInFunc "in" [Var "v"])])),
-                ("pop", 9, (VFunc [([VVar "xs"], BuiltInFunc "pop" [Var "xs"])])),
-                ("hasElems", 10, (VFunc [([VVar "n", VVar "xs"], BuiltInFunc "hasElems" [Var "n", Var "xs"]),
+                ("setIn", 9, (VFunc [([VVar "xs"], BuiltInFunc "setIn" [Var "xs"])])),
+                ("pop", 10, (VFunc [([VVar "xs"], BuiltInFunc "pop" [Var "xs"])])),
+                ("hasElems", 11, (VFunc [([VVar "n", VVar "xs"], BuiltInFunc "hasElems" [Var "n", Var "xs"]),
                                             ([VVar "xs"], BuiltInFunc "hasElems" [Var "xs"])]))]
           helper xs env store = foldr (\(s,a,e) (env', store') -> (Map.insert s (a,Global) env', MapL.insert a e store')) (env, store) xs
 
@@ -201,6 +204,25 @@ step (BuiltInFunc "hasElems" [Var num, Var stream], env, store, nextAddr, kon)
 
 step (BuiltInFunc "hasElems" [Var stream], env, store, nextAddr, kon) = step (BuiltInFunc "hasElems" [Var "n", Var stream], env', store', nextAddr', kon)
     where (env', store', nextAddr') = overrideEnvStore env store nextAddr "n" (VInt 1) Local
+
+step (BuiltInFunc "setIn" [Var list], env, store, nextAddr, kon)
+    | getType v == TList && length xs > 0 && getListType xs == TInt = trace (show $ MapL.lookup (inputStreamsToRead) store'') $ step (Value VNone, env, store'', nextAddr, kon)
+    where v = lookupVar list env store
+          (VList xs) = v
+          store' = foldr (\(VInt x) store' -> case MapL.lookup (-x) store' of
+                                            Just (VStream i ys) -> store'
+                                            Nothing -> MapL.insert (-x) (VStream x []) store'
+                            ) store xs
+
+          store'' = let ls = MapL.lookup (inputStreamsToRead) store' in
+                        case ls of
+                            Just (VList ys) -> MapL.update (\x -> Just (VList (sort xs))) (inputStreamsToRead) store'
+                            Nothing -> MapL.insert (inputStreamsToRead) (VList (sort xs)) store'
+
+          getListType [] = TInt
+          getListType ((VInt _):xs) = getListType xs
+          getListType _ = TConflict
+
 
 -- Returning from a function.
 step (Value e1, env, store, nextAddr, ReturnFrame:kon) = return (Value e1, env, store, nextAddr, kon)
@@ -447,11 +469,19 @@ handleStreamInput (VStream i xs) n store = do
 updateStreams :: Int -> Store -> IO Store
 updateStreams n store = do
     xss <- readInput [] n
-    return $ fst $ foldl (\(store', c) xs -> case MapL.lookup c store' of
+    let ks = case MapL.lookup (inputStreamsToRead) store of
+                    Just (VList ks') -> foldr (\(VInt k) acc -> k:acc) [] ks'
+                    Nothing -> []
+
+    return $ case ks of 
+                [] -> fst $ foldl (\(store', c) xs -> case MapL.lookup c store' of
                                             Just (VStream i ys) -> (MapL.update (\x -> Just (VStream i (ys++xs))) c store', c-1)
                                             Nothing -> (MapL.insert c (VStream (abs c) xs) store', c-1)
                                             _ -> error "Should be a VStream in negative Store addresses."
                             ) (store, 0) xss
+                _ -> case (length xss)-1 < (last ks) of
+                            False -> foldl (\store' k -> MapL.update (\(VStream i ys) -> Just (VStream i (ys++(xss!!k)))) (-k) store') store ks
+                            True -> error "Input length is less than the specified number of input streams."
 
 -- Read n lines of input into stream buffers (a list of lists).
 readInput :: [[ExprValue]] -> Int -> IO [[ExprValue]]

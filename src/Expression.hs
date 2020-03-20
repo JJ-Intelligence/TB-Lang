@@ -118,6 +118,19 @@ instance Show ExprValue where
   show (GlobalEnv env) = "GlobalEnv " ++ (show env)
   show (VVar s) = "Var " ++ s
 
+instance Ord ExprValue where
+  (<) (VInt a) (VInt b) = a < b
+  (<) _ _ = error "ExprValue can not be used in comparison operation."
+
+  (<=) (VInt a) (VInt b) = a <= b
+  (<=) _ _ = error "ExprValue can not be used in comparison operation."
+
+  (>) (VInt a) (VInt b) = a > b
+  (>) _ _ = error "ExprValue can not be used in comparison operation."
+
+  (>=) (VInt a) (VInt b) = a >= b
+  (>=) _ _ = error "ExprValue can not be used in comparison operation."
+
 -- Binary Operation.
 data BinOp = CompOp ExprComp Expr Expr
            | MathOp ExprMath Expr Expr
