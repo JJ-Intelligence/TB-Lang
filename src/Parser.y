@@ -27,6 +27,16 @@ import Expression
     ']'    { TokenCloseSquare _ }
     ','    { TokenComma _ }
 
+    '++'    { TokenPlusPlus _ }
+    '--'    { TokenMinusMinus _ }
+    '+='    { TokenPlusAssignment _ }
+    '-='    { TokenMinusAssignment _ }
+    '*='    { TokenMultiplyAssignment _ }
+    '/='    { TokenDivideAssignment _ }
+    '^='    { TokenExponentAssignment _ }
+    '&='    { TokenAndAssignment _ }
+    '|='    { TokenOrAssignment _ }
+
     '+'    { TokenPlus _ }
     '-'    { TokenMinus _ }
     '/'    { TokenDivide _ }
@@ -50,7 +60,7 @@ import Expression
     var    { TokenVar $$ _ }
 
 %right ';'
-%left '='
+%left '=' '+=' '-=' '*=' '/=' '^=' '&=' '|='
 %right ':'
 %left or
 %left and
@@ -74,6 +84,10 @@ E : E ';' E                         { Seq $1 $3 }
   | return '(' ')'                  { Return (Literal ENone) }
   | var '(' P ')'                   { FuncCall $1 $3 }
   | var '('')'                      { FuncCall $1 FuncParamEnd }
+  | var '++'                        { FuncBlock (Seq (DefVar $1 (Op (MathOp Plus (Var $1) (Literal $ EInt 1)))) (Return (Op (MathOp Min (Var $1) (Literal $ EInt 1))))) }
+  | var '--'                        { FuncBlock (Seq (DefVar $1 (Op (MathOp Min (Var $1) (Literal $ EInt 1)))) (Return (Op (MathOp Plus (Var $1) (Literal $ EInt 1))))) }
+  | '++' var                        { DefVar $2 (Op (MathOp Plus (Var $2) (Literal $ EInt 1))) }
+  | '--' var                        { DefVar $2 (Op (MathOp Min (Var $2) (Literal $ EInt 1))) }
   | '&'E                            { AddressExpr $2 }
   | V                               { $1 }
   | B                               { $1 }
@@ -83,6 +97,13 @@ E : E ';' E                         { Seq $1 $3 }
 
 V : '*'var '=' E                    { DefPointerVar $2 $4 }
   | '*'var %prec POINT              { PointerVar $2 }
+  | var '+=' E                      { DefVar $1 (Op (MathOp Plus (Var $1) $3)) }
+  | var '-=' E                      { DefVar $1 (Op (MathOp Min (Var $1) $3)) }
+  | var '*=' E                      { DefVar $1 (Op (MathOp Mult (Var $1) $3)) }
+  | var '/=' E                      { DefVar $1 (Op (MathOp Div (Var $1) $3)) }
+  | var '^=' E                      { DefVar $1 (Op (MathOp Exp (Var $1) $3)) }
+  | var '&=' E                      { DefVar $1 (Op (CompOp And (Var $1) $3)) }
+  | var '|=' E                      { DefVar $1 (Op (CompOp Or (Var $1) $3)) }
   | var '=' E                       { DefVar $1 $3 }
   | var                             { Var $1 }
 
