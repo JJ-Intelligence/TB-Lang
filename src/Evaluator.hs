@@ -190,23 +190,26 @@ step (BuiltInFunc "pop" [Var list], env, store, nextAddr, kon)
 step (BuiltInFunc "hasElems" [Var num, Var stream], env, store, nextAddr, kon)
     | getType n == TInt && n' >= 0 && getType v == TRef && st /= Nothing && getType (fromJust st) == TStream = do
         (ys, store') <- peakStreamInput (fromJust st) n' store
-        case length ys of
-            0 -> step (Value $ VBool False, env, store', nextAddr, kon)
-            _ -> case head ys of
-                        (VInt _) -> step (Value $ VBool True, env, store', nextAddr, kon)
-                        VNone -> step (Value $ VBool False, env, store', nextAddr, kon)
-                        _ -> error "Something went wrong in the input."
+        case (length ys < n') of
+            True -> step (Value $ VBool False, env, store', nextAddr, kon)
+            False -> let b = foldl (\acc x -> if (getType x == TNone) then False else acc) True ys in
+                        step (Value $ VBool b, env, store', nextAddr, kon)
+    | otherwise = error "Error in hasElems function."
     where n = (lookupVar num env store)
           (VInt n') = n
           v = lookupVar stream env store
           (VRef r) = v
           st = MapL.lookup r store
 
+          helper [] = True
+          helper ((VInt _):ys) = helper ys
+          helper _ = False
+
 step (BuiltInFunc "hasElems" [Var stream], env, store, nextAddr, kon) = step (BuiltInFunc "hasElems" [Var "n", Var stream], env', store', nextAddr', kon)
     where (env', store', nextAddr') = overrideEnvStore env store nextAddr "n" (VInt 1) Local
 
 step (BuiltInFunc "setIn" [Var list], env, store, nextAddr, kon)
-    | getType v == TList && length xs > 0 && getListType xs == TInt = trace (show $ MapL.lookup (inputStreamsToRead) store'') $ step (Value VNone, env, store'', nextAddr, kon)
+    | getType v == TList && length xs > 0 && getListType xs == TInt = step (Value VNone, env, store'', nextAddr, kon)
     where v = lookupVar list env store
           (VList xs) = v
           store' = foldr (\(VInt x) store' -> case MapL.lookup (-x) store' of
@@ -382,6 +385,7 @@ getType (VBool _) = TBool
 getType (VList _) = TList
 getType (VRef _) = TRef
 getType (VStream _ _) = TStream
+getType VNone = TNone
 
 -- Lookup a variable in the Environment and Store. Throw an error if it can't be found, else return its corresponding ExprValue.
 lookupVar :: String -> Environment -> Store -> ExprValue
@@ -469,38 +473,52 @@ handleStreamInput (VStream i xs) n store = do
 updateStreams :: Int -> Store -> IO Store
 updateStreams n store = do
     xss <- readInput [] n
+
     let ks = case MapL.lookup (inputStreamsToRead) store of
                     Just (VList ks') -> foldr (\(VInt k) acc -> k:acc) [] ks'
                     Nothing -> []
 
-    return $ case ks of 
-                [] -> fst $ foldl (\(store', c) xs -> case MapL.lookup c store' of
-                                            Just (VStream i ys) -> (MapL.update (\x -> Just (VStream i (ys++xs))) c store', c-1)
-                                            Nothing -> (MapL.insert c (VStream (abs c) xs) store', c-1)
-                                            _ -> error "Should be a VStream in negative Store addresses."
-                            ) (store, 0) xss
-                _ -> case (length xss)-1 < (last ks) of
-                            False -> foldl (\store' k -> MapL.update (\(VStream i ys) -> Just (VStream i (ys++(xss!!k)))) (-k) store') store ks
-                            True -> error "Input length is less than the specified number of input streams."
+    return $ case xss of
+                [] -> case ks of
+                        [] -> helper 0 store
+                        _ -> foldl (\store' k -> MapL.update (\(VStream i ys) -> Just (VStream i (ys++[VNone]))) (-k) store') store ks
+                _ -> case ks of 
+                        [] -> fst $ foldl (\(store', c) xs -> case MapL.lookup c store' of
+                                                    Just (VStream i ys) -> (MapL.update (\x -> Just (VStream i (ys++xs))) c store', c-1)
+                                                    Nothing -> (MapL.insert c (VStream (abs c) xs) store', c-1)
+                                                    _ -> error "Should be a VStream in negative Store addresses."
+                                    ) (store, 0) xss
+                        _ -> case (length xss)-1 < (last ks) of
+                                    False -> foldl (\store' k -> MapL.update (\(VStream i ys) -> Just (VStream i (ys++(xss!!k)))) (-k) store') store ks
+                                    True -> error "Input length is less than the specified number of input streams."
+
+        where helper c store = case MapL.lookup c store of
+                                    Just (VStream i ys) -> helper (c-1) (MapL.update (\x -> Just (VStream i (ys++[VNone]))) c store)
+                                    Nothing -> store
 
 -- Read n lines of input into stream buffers (a list of lists).
 readInput :: [[ExprValue]] -> Int -> IO [[ExprValue]]
 readInput xss 0 = return xss
 readInput [] n = do
     end <- isEOF
-    line <- getLine
-    let line' = foldr (\x acc -> [VInt x]:acc) [] $ map (read :: String -> Int) $ words line
-    if end then return [] else readInput line' (n-1)
+
+    if end
+        then return []
+        else do line <- getLine
+                let line' = foldr (\x acc -> [VInt x]:acc) [] $ map (read :: String -> Int) $ words line
+                readInput line' (n-1)
+
 readInput xss n = do 
     end <- isEOF
-    line <- getLine
-    let line' = map ((\i -> VInt i) . (read :: String -> Int)) $ words line
-    let xss' = if (length xss /= length line') 
-        then (error "Error in readInput function, input is not in the correct format.") 
-        else (helper xss line')
+
     if end 
         then return (helper xss (replicate (length xss) VNone))
-        else readInput xss' (n-1)
+        else do line <- getLine
+                let line' = map ((\i -> VInt i) . (read :: String -> Int)) $ words line
+                let xss' = if (length xss /= length line') 
+                                then (error "Error in readInput function, input is not in the correct format.") 
+                                else (helper xss line')
+                readInput xss' (n-1)
 
         where helper [] [] = []
               helper (ys:yss) (x:xs) = (ys ++ [x]) : helper yss xs

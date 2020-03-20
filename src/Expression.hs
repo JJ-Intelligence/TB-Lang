@@ -52,6 +52,7 @@ type State = (Expr, Environment, Store, Address, Kon)
 data Type = TInt 
           | TBool 
           | TEmpty 
+          | TNone
           | TList
           | TStream
           | TRef
@@ -61,6 +62,7 @@ instance Show Type where
     show TInt = "Int"
     show TBool = "Boolean"
     show TEmpty = ""
+    show TNone = "null"
     show TList = "[]" 
     show TStream = "Stream"
     show TRef = "Reference"
