@@ -27,6 +27,16 @@ import Expression
     ']'    { TokenCloseSquare _ }
     ','    { TokenComma _ }
 
+    '++'    { TokenPlusPlus _ }
+    '--'    { TokenMinusMinus _ }
+    '+='    { TokenPlusAssignment _ }
+    '-='    { TokenMinusAssignment _ }
+    '*='    { TokenMultiplyAssignment _ }
+    '/='    { TokenDivideAssignment _ }
+    '^='    { TokenExponentAssignment _ }
+    '&='    { TokenAndAssignment _ }
+    '|='    { TokenOrAssignment _ }
+
     '+'    { TokenPlus _ }
     '-'    { TokenMinus _ }
     '/'    { TokenDivide _ }
@@ -74,6 +84,7 @@ E : E ';' E                         { Seq $1 $3 }
   | return '(' ')'                  { Return (Literal ENone) }
   | var '(' P ')'                   { FuncCall $1 $3 }
   | var '('')'                      { FuncCall $1 FuncParamEnd }
+  | var '++'                        { FuncBlock (Seq (DefVar $1 (Op (MathOp Plus (Var $1) (Literal $ EInt 1)))) (Return (Op (MathOp Min (Var $1) (Literal $ EInt 1))))) }
   | '&'E                            { AddressExpr $2 }
   | V                               { $1 }
   | B                               { $1 }
