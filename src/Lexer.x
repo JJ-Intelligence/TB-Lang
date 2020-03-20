@@ -31,6 +31,16 @@ tokens :-
     \]                                  { \p _ -> TokenCloseSquare p }
     \,                                  { \p _ -> TokenComma p }
 
+    \+\+                                { \p _ -> TokenPlusPlus p }
+    \-\-                                { \p _ -> TokenMinusMinus p }
+    \+\=                                { \p _ -> TokenPlusAssignment p }
+    \-\=                                { \p _ -> TokenMinusAssignment p }
+    \*\=                                { \p _ -> TokenMultiplyAssignment p }
+    \/\=                                { \p _ -> TokenDivideAssignment p }
+    \^\=                                { \p _ -> TokenExponentAssignment p }
+    \&\=                                { \p _ -> TokenAndAssignment p }
+    \|\=                                { \p _ -> TokenOrAssignment p }
+
     \+                                  { \p _ -> TokenPlus p }
     \-                                  { \p _ -> TokenMinus p }
     \/                                  { \p _ -> TokenDivide p }
@@ -76,6 +86,16 @@ data Token =  TokenIf               {pos :: AlexPosn}
             | TokenOpenSquare       {pos :: AlexPosn}
             | TokenCloseSquare      {pos :: AlexPosn}
             | TokenComma            {pos :: AlexPosn}
+
+            | TokenPlusPlus         {pos :: AlexPosn}
+            | TokenMinusMinus       {pos :: AlexPosn}
+            | TokenPlusAssignment   {pos :: AlexPosn}
+            | TokenMinusAssignment  {pos :: AlexPosn}
+            | TokenMultiplyAssignment {pos :: AlexPosn}
+            | TokenDivideAssignment   {pos :: AlexPosn}
+            | TokenExponentAssignment {pos :: AlexPosn}
+            | TokenAndAssignment    {pos :: AlexPosn}
+            | TokenOrAssignment     {pos :: AlexPosn}
 
             | TokenPlus             {pos :: AlexPosn}
             | TokenMinus            {pos :: AlexPosn}
