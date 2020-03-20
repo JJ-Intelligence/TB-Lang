@@ -85,6 +85,9 @@ E : E ';' E                         { Seq $1 $3 }
   | var '(' P ')'                   { FuncCall $1 $3 }
   | var '('')'                      { FuncCall $1 FuncParamEnd }
   | var '++'                        { FuncBlock (Seq (DefVar $1 (Op (MathOp Plus (Var $1) (Literal $ EInt 1)))) (Return (Op (MathOp Min (Var $1) (Literal $ EInt 1))))) }
+  | var '--'                        { FuncBlock (Seq (DefVar $1 (Op (MathOp Min (Var $1) (Literal $ EInt 1)))) (Return (Op (MathOp Plus (Var $1) (Literal $ EInt 1))))) }
+  | '++' var                        { DefVar $2 (Op (MathOp Plus (Var $2) (Literal $ EInt 1))) }
+  | '--' var                        { DefVar $2 (Op (MathOp Min (Var $2) (Literal $ EInt 1))) }
   | '&'E                            { AddressExpr $2 }
   | V                               { $1 }
   | B                               { $1 }
