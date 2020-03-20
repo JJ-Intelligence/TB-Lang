@@ -60,7 +60,7 @@ import Expression
     var    { TokenVar $$ _ }
 
 %right ';'
-%left '='
+%left '=' '+=' '-=' '*=' '/=' '^=' '&=' '|='
 %right ':'
 %left or
 %left and
@@ -97,6 +97,13 @@ E : E ';' E                         { Seq $1 $3 }
 
 V : '*'var '=' E                    { DefPointerVar $2 $4 }
   | '*'var %prec POINT              { PointerVar $2 }
+  | var '+=' E                      { DefVar $1 (Op (MathOp Plus (Var $1) $3)) }
+  | var '-=' E                      { DefVar $1 (Op (MathOp Min (Var $1) $3)) }
+  | var '*=' E                      { DefVar $1 (Op (MathOp Mult (Var $1) $3)) }
+  | var '/=' E                      { DefVar $1 (Op (MathOp Div (Var $1) $3)) }
+  | var '^=' E                      { DefVar $1 (Op (MathOp Exp (Var $1) $3)) }
+  | var '&=' E                      { DefVar $1 (Op (CompOp And (Var $1) $3)) }
+  | var '|=' E                      { DefVar $1 (Op (CompOp Or (Var $1) $3)) }
   | var '=' E                       { DefVar $1 $3 }
   | var                             { Var $1 }
 
