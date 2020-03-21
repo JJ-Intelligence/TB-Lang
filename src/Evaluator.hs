@@ -36,12 +36,16 @@ insertReserved env store = helper ls env (MapL.insert storedGlobalEnv (GlobalEnv
 -- interpret :: String -> State
 -- interpret s = eval $ parse $ alexScanTokens s
 
+-- compiler :: Expr -> State
+-- compiler e = (e, env, store, heapStart, [Done])
+
 -- Start the evaluator by passing it an Expression (from the Parser).
 startEvaluator :: Expr -> IO ()
 startEvaluator e = do
     s <- step (e, env, store, heapStart, [Done])
     putStrLn "\nFinished evaluation.\n"
-        where (env, store) = insertReserved (Map.empty) (MapL.empty)
+        where 
+            (env, store) = insertReserved (Map.empty) (MapL.empty)
 
 -- Step function to move from one State to another.
 step :: State -> IO State
@@ -57,24 +61,42 @@ step (Seq e1 e2, env, store, nextAddr, kon) = step (e1, env, store, nextAddr, (H
 step (Value e1, env, store, nextAddr, (HBinOp (BinSeqOp e2)):kon) = step (e2, env, store, nextAddr, kon)
 
 -- Defining a new Function.
-step (DefVar s (Func ps e1), env, store, nextAddr, kon) = step (Value funcVal, env', store', nextAddr', kon)
-    where funcVal = VFunc [(evaluateParams ps, e1)]
-          (env', store', nextAddr') = updateEnvStore env store nextAddr s funcVal
+step (DefVar s (Func ps e1), env, store, nextAddr, kon) 
+    | checkNoDuplicates [] $ usedVars params = step (Value funcVal, env', store', nextAddr', kon)
+    | otherwise = error $ "Function '" ++ s ++"' has parameters containing multiple variables of the same name. \nIn " ++ (show $ Func ps e1)
+    where 
+        funcVal = VFunc [(params, e1)]
+        (env', store', nextAddr') = updateEnvStore env store nextAddr s funcVal
+        params = evaluateParams ps
 
-          evaluateParams FuncParamEnd = []
-          evaluateParams (FuncParam (PointerExpr (Op (Cons e1 e2))) e3) = VPointerList (evalConsParam $ Op (Cons e1 e2)) : evaluateParams e3
-          evaluateParams (FuncParam (Op (Cons e1 e2)) e3) = VList (evalConsParam $ Op (Cons e1 e2)) : evaluateParams e3
-          evaluateParams (FuncParam e1 e2) = evalSingleParam e1 : evaluateParams e2
-          
-          evalSingleParam (Literal (EInt n)) = (VInt n)
-          evalSingleParam (Literal (EBool b)) = (VBool b)
-          evalSingleParam (Literal Empty) = (VList [])
-          evalSingleParam (Var s) = (VVar s)
-          evalSingleParam (PointerExpr (Var s)) = (VPointer s)
-          evalSingleParam (PointerExpr e1) = VPointerList [evalSingleParam e1]
+        checkNoDuplicates seen [] = True
+        checkNoDuplicates seen (x:xs) 
+            | x `elem` seen = False
+            | otherwise = checkNoDuplicates (x:seen) xs
 
-          evalConsParam (Op (Cons e1 e2)) = evalSingleParam e1 : evalConsParam e2
-          evalConsParam e2 = [evalSingleParam e2]
+        usedVars [] = []
+        usedVars (x:xs) = (helper x) ++ (usedVars xs)
+            where 
+                helper (VPointer s) = [s]
+                helper (VVar s) = [s]
+                helper (VList (x:xs)) = (helper x) ++ (helper (VList xs))
+                helper (VPointerList (x:xs)) = (helper x) ++ (helper (VPointerList xs))
+                helper _ = []
+
+        evaluateParams FuncParamEnd = []
+        evaluateParams (FuncParam (PointerExpr (Op (Cons e1 e2))) e3) = VPointerList (evalConsParam $ Op (Cons e1 e2)) : evaluateParams e3
+        evaluateParams (FuncParam (Op (Cons e1 e2)) e3) = VList (evalConsParam $ Op (Cons e1 e2)) : evaluateParams e3
+        evaluateParams (FuncParam e1 e2) = evalSingleParam e1 : evaluateParams e2
+
+        evalSingleParam (Literal (EInt n)) = (VInt n)
+        evalSingleParam (Literal (EBool b)) = (VBool b)
+        evalSingleParam (Literal Empty) = (VList [])
+        evalSingleParam (Var s) = (VVar s)
+        evalSingleParam (PointerExpr (Var s)) = (VPointer s)
+        evalSingleParam (PointerExpr e1) = VPointerList [evalSingleParam e1]
+
+        evalConsParam (Op (Cons e1 e2)) = evalSingleParam e1 : evalConsParam e2
+        evalConsParam e2 = [evalSingleParam e2]
 
 
 -- Defining a new Var.
