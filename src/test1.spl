@@ -1,60 +1,24 @@
 
-
--- i = [1,2,3];
--- k = &(4);
--- *k = *k + 2;
--- out(*k);
--- out(i);
-
-
--- streamNumber = 0;
--- xs = inp(streamNumber); <- xs becomes a reference to streamnumber input address.
-
-
-
-
-
--- TODO:
--- func solve (*(x:y:ys), k) = {
+-- func solve (*(x:y:ys)) = {
 --     out(x);
 --     out(y);
---     out(ys);
---     out(k);
+--     out(*ys);
 -- };
 
--- xs = &([1,2,3,4,5]) -- 6,7,8
+-- ys = in(0);
 
--- solve(xs, 8);
+-- solve(ys);
 
--- x -> ListRef 11 (Index 0 (Index 1 End))
+-- Challenge 1, solution 1
+func solve ([], bs) = None; 
+func solve (*(x:y:as), *(z:bs)) = {
+    out ([x,y,z]);
+    solve (as, bs);
+};
 
-setIn([1,2]);
+setIn([1,0]);
 
--- xs = in(0);
-ps = in(0);
-ys = in(1);
-xs = in(2);
+as = in(0);
+bs = in(1);
 
-out (drop (1, xs));
-out(*xs);
-
-out(take (2, ys));
-out(*ys);
-
-out (*ps);
-
-setIn([0,1,2]);
-
-out(drop (1, ys));
-out(*ps);
-
-
--- while (hasElems(1, xs)) {
-    
---     x = pop(xs);
---     y = pop(xs);
---     z = pop(ys);
-
---     out([x,y,z]);
-
--- }
+solve (as,bs);

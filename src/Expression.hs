@@ -95,7 +95,9 @@ instance Show ExprLiteral where
 data ExprValue = VInt Int
                | VBool Bool
                | VVar String
+               | VPointer String
                | VList [ ExprValue ]
+               | VPointerList [ ExprValue ]
                | VStream Int [ ExprValue ]
                | VNone
                | VFunc [ ([ExprValue], Expr) ]
@@ -113,12 +115,14 @@ instance Show ExprValue where
   --   where helper [] = " "
   --         helper [y] = (show y) ++ " "
   --         helper (x:y:xs) = (show x) ++ " " ++ (helper (y:xs))
+  show (VPointerList xs) = "VPointerList " ++ (show xs)
   show (VStream n xs) = "VStream " ++ (show n) ++ " " ++ (show xs)
   show VNone = "null"
   show (VFunc xs) = "VFunc " ++ (show xs)
   show (VRef n) = "VRef " ++ (show n)
   show (GlobalEnv env) = "GlobalEnv " ++ (show env)
   show (VVar s) = "Var " ++ s
+  show (VPointer s) = "Var *" ++ s
 
 instance Ord ExprValue where
   (<) (VInt a) (VInt b) = a < b
@@ -195,7 +199,7 @@ data Expr = If Expr Expr (Maybe ExprElif)
           | Value ExprValue
           | Op BinOp
           | DefPointerVar String Expr
-          | PointerVar String
+          | PointerExpr Expr
           | AddressExpr Expr
           | DefVar String Expr
           | Var String
@@ -215,7 +219,7 @@ data Expr = If Expr Expr (Maybe ExprElif)
 --   show (Value v) = show v
 --   show (Op op) = show op
 --   show (DefPointerVar s e) = "*" ++ s ++ " = " ++ (show e)
---   show (PointerVar s) = "*" ++ s
+--   show (PointerExpr e) = "*(" ++ (show e) ++ ")"
 --   show (AddressVar s) = "&" ++ s
 --   show (DefVar s e1) = s ++ " = " ++ (show e1)
 --   show (Var s) = s

@@ -62,16 +62,19 @@ step (DefVar s (Func ps e1), env, store, nextAddr, kon) = step (Value funcVal, e
           (env', store', nextAddr') = updateEnvStore env store nextAddr s funcVal
 
           evaluateParams FuncParamEnd = []
-          evaluateParams (FuncParam (Op (Cons e1 e2)) e3) = VList (helper' $ Op (Cons e1 e2)) : evaluateParams e3
-                where helper' (Op (Cons e1 e2)) = helper e1 : helper' e2
-                      helper' e2 = [helper e2]
-
-          evaluateParams (FuncParam e1 e2) = helper e1 : evaluateParams e2
+          evaluateParams (FuncParam (PointerExpr (Op (Cons e1 e2))) e3) = VPointerList (evalConsParam $ Op (Cons e1 e2)) : evaluateParams e3
+          evaluateParams (FuncParam (Op (Cons e1 e2)) e3) = VList (evalConsParam $ Op (Cons e1 e2)) : evaluateParams e3
+          evaluateParams (FuncParam e1 e2) = evalSingleParam e1 : evaluateParams e2
           
-          helper (Literal (EInt n)) = (VInt n)
-          helper (Literal (EBool b)) = (VBool b)
-          helper (Literal Empty) = (VList [])
-          helper (Var s) = (VVar s)
+          evalSingleParam (Literal (EInt n)) = (VInt n)
+          evalSingleParam (Literal (EBool b)) = (VBool b)
+          evalSingleParam (Literal Empty) = (VList [])
+          evalSingleParam (Var s) = (VVar s)
+          evalSingleParam (PointerExpr (Var s)) = (VPointer s)
+          evalSingleParam (PointerExpr e1) = VPointerList [evalSingleParam e1]
+
+          evalConsParam (Op (Cons e1 e2)) = evalSingleParam e1 : evalConsParam e2
+          evalConsParam e2 = [evalSingleParam e2]
 
 
 -- Defining a new Var.
@@ -93,7 +96,8 @@ step (Value e1, env, store, nextAddr, (DefPointerVarFrame s env'):kon)
 step (Var s, env, store, nextAddr, kon) = step (Value $ lookupVar s env store, env, store, nextAddr, kon)
 
 -- Accessing a variable pointer.
-step (PointerVar s, env, store, nextAddr, kon) = step (Value $ lookupPointerVar s env store, env, store, nextAddr, kon)
+step (PointerExpr (Var s), env, store, nextAddr, kon) = step (Value $ lookupPointerVar s env store, env, store, nextAddr, kon)
+step (PointerExpr e1, env, store, nextAddr, kon) = step (e1, env, store, nextAddr, kon)
 
 -- Getting the address for an addressed variable.
 step (AddressExpr (Var s), env, store, nextAddr, kon) = step (Value $ VRef $ lookupAddr s env, env, store, nextAddr, kon)
@@ -110,7 +114,7 @@ step (Value e1, env, store, nextAddr, FuncBlockFrame:kon) = step (Value VNone, e
 -- User-defined function calls.
 step (FuncCall s ps, env, store, nextAddr, kon) = do
     (args, store') <- evaluateArgs ps env store nextAddr []
-    let (e1, env', store'', nextAddr') = handleFuncArgs args env store' nextAddr s -- Pattern match
+    (e1, env', store'', nextAddr') <- handleFuncArgs args env store' nextAddr s -- Pattern match
     (Value e2, _, store''', _, _) <- step (e1, env', store'', nextAddr', ReturnFrame:kon) -- Recurse into function call.
 
     step (Value e2, env, store''', nextAddr, kon) -- Continue after function call returns.
@@ -346,37 +350,92 @@ evaluateArgs (FuncParam e1 e2) env store nextAddr ls = do
 
 -- Pattern matches a function parameters with some given arguments, returning the functions Expr value, as well as updated Env, Store, and next Address.
 -- Takes in the unevaluated arguments, the current Env, Store and next Address, as well as the function name.
-handleFuncArgs :: [ExprValue] -> Environment -> Store -> Address -> String -> (Expr, Environment, Store, Address)
-handleFuncArgs args' env store nextAddr s = (e1, env', store'', nextAddr')
-    where (env', store'', nextAddr') = foldr (\(s, e2) (accEnv, accStore, addr) -> (overrideEnvStore accEnv accStore addr s e2 Local)) (globalEnv, store', nextAddr) xs
-          (e1, xs) = matchArgsToFunc args' (lookupVar s env store)
-          (globalEnv, store') = let (Just (GlobalEnv e)) = MapL.lookup storedGlobalEnv store in 
-                                 if (e == Map.empty) then (env, MapL.update (\x -> Just $ GlobalEnv env) storedGlobalEnv store) else (e, store) -- update Global Env
+handleFuncArgs :: [ExprValue] -> Environment -> Store -> Address -> String -> IO (Expr, Environment, Store, Address)
+handleFuncArgs args env store nextAddr s = do
+    (e1, xs, store') <- matchArgsToFunc store args (lookupVar s env store)
+    let (globalEnv, store'') = let (Just (GlobalEnv e)) = MapL.lookup storedGlobalEnv store' in 
+                                        if (e == Map.empty) then (env, MapL.update (\x -> Just $ GlobalEnv env) storedGlobalEnv store') else (e, store') -- update Global Env
+    let (env', store''', nextAddr') = foldr (\(s, e2) (accEnv, accStore, addr) -> (overrideEnvStore accEnv accStore addr s e2 Local)) (globalEnv, store'', nextAddr) xs
+
+    return (e1, env', store''', nextAddr')
+              
 
 -- Takes in a list of evaluated arguments, and a list of evaluated function parameters.
 -- Returns the function Expr value to use, as well as a list of Strings to ExprValues which need to be added to the Env and Store.
-matchArgsToFunc :: [ExprValue] -> ExprValue -> (Expr, [(String, ExprValue)])
-matchArgsToFunc _ (VFunc []) = error "No matching patterns for that function."
-matchArgsToFunc args (VFunc ((ps,e1):xs))
-    | length args /= length ps  || ys == Nothing = matchArgsToFunc args (VFunc xs)
-    | otherwise = (e1, fromJust ys)
-    where ys = foldr (\(p, a) acc -> let e = (matchParamToArg p a []) in 
-                                        if (acc == Nothing || e == Nothing) then Nothing else Just $ (fromJust e) ++ (fromJust acc)) (Just []) (zip ps args)
+matchArgsToFunc :: Store -> [ExprValue] -> ExprValue -> IO (Expr, [(String, ExprValue)], Store)
+matchArgsToFunc _ _ (VFunc []) = error "No matching patterns for that function."
+matchArgsToFunc store args (VFunc ((ps,e1):xs)) = do
+    (ys,store') <- foldr (\(p, a) acc -> do
+                                (ls, store') <- acc
 
-          matchParamToArg (VList []) (VList []) ls = Just ls
-          matchParamToArg (VList [VList []]) (VList []) ls = Just ls
-          matchParamToArg (VList [VVar s]) (VList ys) ls = matchParamToArg (VVar s) (VList ys) ls
+                                case ls of
+                                    Nothing -> return (Nothing, store')
 
-          matchParamToArg (VList (x:xs)) (VList (y:ys)) ls
-                | e == Nothing = Nothing
-                | otherwise = matchParamToArg (VList xs) (VList ys) (fromJust e)
-                where e = matchParamToArg x y ls
+                                    Just (ls') -> (matchParamToArg p a ls' store')
 
-          matchParamToArg (VVar s) e2 ls = Just ((s, e2):ls)
-          matchParamToArg (VInt n) (VInt n') ls = if n == n' then Just ls else Nothing
-          matchParamToArg (VBool b) (VBool b') ls = if b == b' then Just ls else Nothing
-          matchParamToArg _ _ _ = Nothing
+                            ) (return (Just [], store)) (zip ps args)
 
+    if (length args /= length ps  || ys == Nothing) then matchArgsToFunc store' args (VFunc xs) else return (e1, fromJust ys, store')
+
+        where 
+          matchParamToArg :: ExprValue -> ExprValue -> [(String, ExprValue)] -> Store -> IO (Maybe [(String, ExprValue)], Store)
+          matchParamToArg (VList []) (VList []) ls store = return (Just ls, store)
+          matchParamToArg (VList [VList []]) (VList []) ls store = return (Just ls, store)
+          matchParamToArg (VList [VVar s]) (VList ys) ls store = matchParamToArg (VVar s) (VList ys) ls store
+
+          matchParamToArg (VList (x:xs)) (VList (y:ys)) ls store = do
+                (e, store') <- matchParamToArg x y ls store
+                case e of
+                    Nothing -> return (Nothing, store')
+                    Just (ls') -> matchParamToArg (VList xs) (VList ys) ls' store'
+
+          matchParamToArg l@(VPointerList xs) r@(VRef a) ls store
+                | v /= Nothing && (getType v' == TList || getType v' == TStream) = 
+                    matchPointerListToRef l r v' ls store
+                | otherwise = return (Nothing, store)
+                where v = MapL.lookup a store
+                      (Just v') = v
+
+          matchParamToArg (VPointer s) e2@(VRef a) ls store = return (Just ((s, e2):ls), store)
+          matchParamToArg _ e2@(VRef a) ls store = return (Nothing, store)
+          matchParamToArg (VVar s) e2 ls store = return (Just ((s, e2):ls), store)
+          matchParamToArg (VInt n) (VInt n') ls store = return $ if n == n' then (Just ls, store) else (Nothing, store)
+          matchParamToArg (VBool b) (VBool b') ls store = return $ if b == b' then (Just ls, store) else (Nothing, store)
+          matchParamToArg _ _ _ store = return (Nothing, store)
+
+          matchPointerListToRef :: ExprValue -> ExprValue -> ExprValue -> [(String, ExprValue)] -> Store -> IO (Maybe [(String, ExprValue)], Store)
+          matchPointerListToRef (VPointerList []) _ _ ls store = return (Just ls, store)
+          matchPointerListToRef (VPointerList [VList []]) r (VList []) ls store = return (Just ls, store)
+          matchPointerListToRef (VPointerList [VList []]) r st@(VStream _ _) ls store = do
+                (xs, store') <- peakStreamInput st 1 store
+                return $ if (head xs == VNone) then (Just ls, store') else (Nothing, store')
+
+          matchPointerListToRef (VPointerList [VVar s]) r@(VRef a) (VList ys) ls store = return (Just ((s,r):ls), MapL.update (\x -> Just $ VList ys) a store)
+          matchPointerListToRef (VPointerList [VVar s]) r _ ls store = return (Just ((s,r):ls), store)
+
+          matchPointerListToRef (VPointerList (x:xs)) r (VList (y:ys)) ls store = do
+                (e, store') <- matchParamToArg x y ls store
+                case e of
+                    Nothing -> return (Nothing, store')
+                    Just (ls') -> matchPointerListToRef (VPointerList xs) r (VList ys) ls' store'
+
+          matchPointerListToRef (VPointerList (x:xs)) r st@(VStream i ys) ls store = do
+                (ys', store') <- peakStreamInput st 1 store
+                case head ys' of
+
+                    VNone -> return (Nothing, store')
+                    
+                    _ -> do
+                        (e, store'') <- matchParamToArg x (head ys') ls store'
+                        case e of
+                            
+                            Nothing -> return (Nothing, store'')
+                            
+                            Just (ls') -> do 
+                                (_, store''') <- dropStreamInput st 1 store''
+                                matchPointerListToRef (VPointerList xs) r st ls' store'''
+
+          matchPointerListToRef _ _ _ _ store = return (Nothing, store)
 
 -- Gets the type of a Value.
 getType :: ExprValue -> Type
@@ -446,8 +505,8 @@ updateStore store a e1
 -- Takes in stream num, num of values to get from the buffer, and the current store.
 -- Returns updated store and list of values retrieved.
 peakStreamInput :: ExprValue -> Int -> Store -> IO ([ExprValue], Store)
-peakStreamInput (VStream i xs) n store = do
-    (VStream i' ys, store') <- handleStreamInput (VStream i xs) n store
+peakStreamInput st@(VStream i _) n store = do
+    (VStream i' ys, store') <- handleStreamInput st n store
     return (take n ys, store')
 
 peakStreamInput _ _ _ = error "peakStreamInput function only takes in a VStream type."
@@ -455,14 +514,15 @@ peakStreamInput _ _ _ = error "peakStreamInput function only takes in a VStream 
 -- Takes in stream num, num of values to get from the buffer, and the current store.
 -- Returns updated store and list of values retrieved.
 dropStreamInput :: ExprValue -> Int -> Store -> IO ([ExprValue], Store)
-dropStreamInput (VStream i xs) n store = do
-    (VStream i' ys, store') <- handleStreamInput (VStream i xs) n store
+dropStreamInput st@(VStream i _) n store = do
+    (VStream i' ys, store') <- handleStreamInput st n store
     return (take n ys, MapL.update (\x -> Just (VStream i' $ drop n ys)) (-i') store')
 
 dropStreamInput _ _ _ = error "dropStreamInput function only takes in a VStream type."
 
-handleStreamInput :: ExprValue -> Int -> Store -> IO (ExprValue, Store)
-handleStreamInput (VStream i xs) n store = do
+handleStreamInput :: ExprValue -> Int -> Store -> IO (ExprValue, Store) -- Update to just take in address!
+handleStreamInput (VStream i _) n store = do
+    let (VStream _ xs) = fromJust $ MapL.lookup (-i) store
     store' <- case length xs >= n of
                         True -> return store
                         False -> do updateStreams (n - length xs) store
