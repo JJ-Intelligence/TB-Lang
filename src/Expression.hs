@@ -108,13 +108,9 @@ data ExprValue = VInt Int
 instance Show ExprValue where
   show (VInt n) = show n
   show (VBool b) = show b
-  show (VList xs) = "VList " ++ (show xs)
-  -- show (VList []) = "[]"
-  -- show (VList ((VList xs):ls)) = (show (VList xs)) ++ "\n" ++ (show (VList ls)) 
-  -- show (VList xs) = filter (/='"') (helper (map (show) xs))
-  --   where helper [] = " "
-  --         helper [y] = (show y) ++ " "
-  --         helper (x:y:xs) = (show x) ++ " " ++ (helper (y:xs))
+  show (VList []) = ""
+  show (VList [x]) = show x
+  show (VList (x:xs)) = (show x) ++ "\n" ++ (show $ VList xs)
   show (VPointerList xs) = "VPointerList " ++ (show xs)
   show (VStream n xs) = "VStream " ++ (show n) ++ " " ++ (show xs)
   show VNone = "null"

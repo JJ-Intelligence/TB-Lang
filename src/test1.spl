@@ -12,7 +12,7 @@
 -- Challenge 1, solution 1
 func solve ([], bs) = None; 
 func solve (*(x:y:as), *(z:bs)) = {
-    out ([x,y,z]);
+    -- out ([x,y,z]);
     solve (as, bs);
 };
 

@@ -391,7 +391,7 @@ matchArgsToFunc store args (VFunc ((ps,e1):xs)) = do
 
           matchParamToArg l@(VPointerList xs) r@(VRef a) ls store
                 | v /= Nothing && (getType v' == TList || getType v' == TStream) = 
-                    matchPointerListToRef l r v' ls store
+                    matchPointerListToRef l r v' ls store 0
                 | otherwise = return (Nothing, store)
                 where v = MapL.lookup a store
                       (Just v') = v
@@ -403,39 +403,54 @@ matchArgsToFunc store args (VFunc ((ps,e1):xs)) = do
           matchParamToArg (VBool b) (VBool b') ls store = return $ if b == b' then (Just ls, store) else (Nothing, store)
           matchParamToArg _ _ _ store = return (Nothing, store)
 
-          matchPointerListToRef :: ExprValue -> ExprValue -> ExprValue -> [(String, ExprValue)] -> Store -> IO (Maybe [(String, ExprValue)], Store)
-          matchPointerListToRef (VPointerList []) _ _ ls store = return (Just ls, store)
-          matchPointerListToRef (VPointerList [VList []]) r (VList []) ls store = return (Just ls, store)
-          matchPointerListToRef (VPointerList [VList []]) r st@(VStream _ _) ls store = do
-                (xs, store') <- peakStreamInput st 1 store
-                return $ if (head xs == VNone) then (Just ls, store') else (Nothing, store')
+          matchPointerListToRef :: ExprValue -> ExprValue -> ExprValue -> [(String, ExprValue)] -> Store -> Int -> IO (Maybe [(String, ExprValue)], Store)
+          matchPointerListToRef (VPointerList []) _ _ ls store c = return (Just ls, store)
+          matchPointerListToRef (VPointerList [VList []]) r (VList []) ls store c = return (Just ls, store)
+          matchPointerListToRef (VPointerList [VList []]) r st@(VStream _ _) ls store c = do
+                (xs, store') <- peakStreamInput st (c+1) store
+                if ((length xs)-1 < c || xs!!c /= VNone)
+                            then return (Nothing, store')
+                            else do
+                                (_, store'') <- dropStreamInput st c store'
+                                return (Just ls, store'')
 
-          matchPointerListToRef (VPointerList [VVar s]) r@(VRef a) (VList ys) ls store = return (Just ((s,r):ls), MapL.update (\x -> Just $ VList ys) a store)
-          matchPointerListToRef (VPointerList [VVar s]) r _ ls store = return (Just ((s,r):ls), store)
+          matchPointerListToRef (VPointerList [VVar s]) r@(VRef a) (VList ys) ls store c = 
+                return (Just ((s,r):ls), MapL.update (\x -> Just $ VList ys) a store)
 
-          matchPointerListToRef (VPointerList (x:xs)) r (VList (y:ys)) ls store = do
+          matchPointerListToRef (VPointerList [VVar s]) r@(VRef a) st@(VStream _ _) ls store c = do
+                (_, store') <- dropStreamInput st c store
+                return (Just ((s,r):ls), store')
+
+          matchPointerListToRef (VPointerList (x:xs)) r (VList (y:ys)) ls store c = do
                 (e, store') <- matchParamToArg x y ls store
                 case e of
                     Nothing -> return (Nothing, store')
-                    Just (ls') -> matchPointerListToRef (VPointerList xs) r (VList ys) ls' store'
+                    Just (ls') -> matchPointerListToRef (VPointerList xs) r (VList ys) ls' store' c
 
-          matchPointerListToRef (VPointerList (x:xs)) r st@(VStream i ys) ls store = do
-                (ys', store') <- peakStreamInput st 1 store
-                case head ys' of
+          matchPointerListToRef (VPointerList (x:xs)) r st@(VStream i _) ls store c = do
+                (ys, store') <- peakStreamInput st (c+1) store
 
-                    VNone -> return (Nothing, store')
-                    
-                    _ -> do
-                        (e, store'') <- matchParamToArg x (head ys') ls store'
-                        case e of
+                if ((length ys)-1 < c) 
+                    then return (Nothing, store')
+                    else case ys!!c of
+                            VNone -> return (Nothing, store')
                             
-                            Nothing -> return (Nothing, store'')
-                            
-                            Just (ls') -> do 
-                                (_, store''') <- dropStreamInput st 1 store''
-                                matchPointerListToRef (VPointerList xs) r st ls' store'''
+                            y -> do
+                                (e, store'') <- matchParamToArg x y ls store'
+                                case e of
+                                    
+                                    Nothing -> return (Nothing, store'')
+                                    
+                                    Just (ls') -> matchPointerListToRef (VPointerList xs) r st ls' store'' (c+1)
 
-          matchPointerListToRef _ _ _ _ store = return (Nothing, store)
+                                        -- Evaluate and pair params to stream values.
+                                        -- Then, only drop items from the stream if doesn't return Nothing.
+                                        -- Maintain a counter c for the number of items to drop.
+                                        -- Start with c = 0
+                                        -- When peaking, peak c items, and get the c'th element
+                                        -- If e /= Nothing, then recurse with c+1.
+
+          matchPointerListToRef _ _ _ _ store _ = return (Nothing, store)
 
 -- Gets the type of a Value.
 getType :: ExprValue -> Type
