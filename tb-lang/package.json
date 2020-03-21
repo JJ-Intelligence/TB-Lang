@@ -1,0 +1,25 @@
+{
+    "name": "tb-lang",
+    "displayName": "TB Lang",
+    "description": "Syntax highlighting for TB language (comp2212 coursework jp6g18 and jljh1g18)",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.43.0"
+    },
+    "categories": [
+        "Programming Languages"
+    ],
+    "contributes": {
+        "languages": [{
+            "id": "tb",
+            "aliases": ["TB", "tb"],
+            "extensions": [".spl"],
+            "configuration": "./language-configuration.json"
+        }],
+        "grammars": [{
+            "language": "tb",
+            "scopeName": "source.tb",
+            "path": "./syntaxes/tb.tmLanguage.json"
+        }]
+    }
+}

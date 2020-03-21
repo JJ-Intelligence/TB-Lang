@@ -1,0 +1,59 @@
+
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "TB",
+	"patterns": [
+		{
+			"include": "#keywords"
+		},
+		{
+			"include": "#comments"
+		},
+		{
+			"include": "#constants"
+		},
+		{
+			"include": "#vars"
+		},
+		{
+			"include": "#operators"
+		}
+	],
+	"repository": {
+		"keywords": {
+			"patterns": [{
+				"name": "keyword.control.tb",
+				"match": "\\b(if|while|for|return|func|elif|else)\\b"
+			}]
+		},
+		"comments": {
+		  	"patterns": [{
+				"name": "comment.line.double-dash",
+				"match": "-- .*"
+			}]
+		},
+		"constants": {
+		  	"patterns": [{
+				"name": "constant.numeric",
+				"match": "\\b[0-9]+\\b"
+			},
+			{
+				"name": "constant.language",
+				"match": "True|False|None"
+			}]
+		},
+
+		"vars": {
+		  	"patterns": [
+			{
+				"name": "support.function",
+				"match": "\\b(out|in|tail|head|drop|take|length|get|pop|hasElems)"
+			},
+			{
+				"name": "variable.other",
+				"match": "\\b[A-Z|a-z|_][A-Z|a-z|0-9|_]*\\b"
+			}]
+		}
+	},
+	"scopeName": "source.tb"
+}

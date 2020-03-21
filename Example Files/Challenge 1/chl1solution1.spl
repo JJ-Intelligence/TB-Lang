@@ -6,5 +6,8 @@ func f (as, bs) = {
 };
 
 while (hasElems(2, in(0)) && hasElems(1, in(1))) {
-    f(in(0), in(1));
+    f(in(None), in(1));
 }
+out(
++ :
+-- jsdsdsdsd
