@@ -73,6 +73,8 @@ import Expression
     var    { TokenVar $$ _ }
 
 %right ';'
+%right '->' -- unsure about this
+%left '~' -- unsure about this
 %left '=' '+=' '-=' '*=' '/=' '^=' '&=' '|='
 %right ':'
 %left or
@@ -106,7 +108,6 @@ E : E ';' E                         { Seq $1 $3 }
   | '*'E %prec POINT                { PointerExpr $2 }
   | FT                              { $1 }
   | TL                              { ExprType $1 }
-  | TC                              { $1 }
   | V                               { $1 }
   | B                               { $1 }
   | O                               { $1 }
@@ -114,7 +115,7 @@ E : E ';' E                         { Seq $1 $3 }
   | L                               { $1 }
 
 FT : '(' P ')' '->' E               { FuncType $2 $5 Nothing}
-   | '(' P ')' '->' E '~' '(' P ')' { FuncType $2 $5 (Just $8)}
+   | '(' P ')' '->' E '~' '(' PC ')'{ FuncType $2 $5 (Just $8)}
 
 TL : '[' ']'                        { TList TEmpty }
    | '[' var ']'                    { TList $ TGeneric $2 }
@@ -125,6 +126,10 @@ TL : '[' ']'                        { TList TEmpty }
    | tBool                          { TBool }
    | tNone                          { TNone }
    | tStream                        { TStream }
+   | cItr var                       { TIterable $ TGeneric $2 }
+
+PC : TC ',' PC                        { FuncParam $1 $3 }
+   | TC                               { FuncParam $1 FuncParamEnd }
 
 TC : cEq var                        { TypeConstraint CEq $2 }
    | cItr var                       { TypeConstraint CItr $2 }

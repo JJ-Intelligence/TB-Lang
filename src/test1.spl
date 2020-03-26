@@ -13,5 +13,14 @@
 -- bs = in(1);
 
 -- solve (as,bs);
-type f (([a]*, Int) -> Bool, [[[c]]]) -> NoneType ~ (Eq a, Ord b, Itr c)
--- type g () -> Int
+
+
+
+type f (Int, Int*, Bool) -> Int;
+func f (x, *y, b) = {
+    out(x);
+    out(*y);
+    out(b);
+};
+
+x = f(4, &8, False);

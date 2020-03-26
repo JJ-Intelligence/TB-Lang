@@ -54,23 +54,28 @@ data Type = TFunc [Type] Type [(String, TypeClass)]
           | TBool 
           | TEmpty 
           | TNone
+          | TIterable Type -- TList and TStream are both iterable types. This takes in the type of the Stream/List.
           | TList Type
           | TStream -- Streams will always be of type Int.
           | TRef Type
           | TGeneric String
           | TConflict
+          | TParamList
           deriving (Eq)
 
 instance Show Type where 
+    show (TFunc ps out cs) = "TFunc " ++ (show ps) ++ " " ++ (show out) ++ " " ++ (show cs)
     show TInt = "Int"
     show TBool = "Boolean"
     show TEmpty = ""
     show TNone = "null"
+    show (TIterable t) = "TIterable " ++ (show t)
     show (TList x) = "["++(show x)++"]" 
     show TStream = "Stream"
     show (TRef x) = "Ref " ++ (show x)
     show (TGeneric s) = s
     show TConflict = "Conflict"
+    show TParamList = "TParamList"
 
 -- **Expression type returned by Parser**
 
@@ -101,7 +106,7 @@ data ExprValue = VInt Int
                | VVar String
                | VPointer String
                | VList Type [ ExprValue ]
-               | VPointerList [ ExprValue ]
+               | VPointerList Type [ ExprValue ]
                | VStream Int [ ExprValue ]
                | VNone
                | VFunc Type [([ExprValue], Expr)]
@@ -116,10 +121,10 @@ instance Show ExprValue where
   show (VList _ []) = ""
   show (VList _ [x]) = show x
   show (VList t (x:xs)) = (show x) ++ "\n" ++ (show $ VList t xs)
-  show (VPointerList xs) = "VPointerList " ++ (show xs)
+  show (VPointerList _ xs) = "VPointerList " ++ (show xs)
   show (VStream n xs) = "VStream " ++ (show n) ++ " " ++ (show xs)
   show VNone = "null"
-  show (VFunc _ xs) = "VFunc " ++ (show xs)
+  show (VFunc ts xs) = "VFunc " ++ (show ts) ++ " " ++ (show xs)
   show (VRef n) = "VRef " ++ (show n)
   show (GlobalEnv env) = "GlobalEnv " ++ (show env)
   show (VVar s) = "Var " ++ s
