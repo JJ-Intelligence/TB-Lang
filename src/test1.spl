@@ -20,5 +20,12 @@ func f (x, y) = x == y;
 
 out(f([1,2], [1,2]));
 
+v = {
+    k = 1;
+};
+    out(k);
 
--- Streams popping too many values!
+out(v);
+
+
+-- Error - k not in env outside of func block

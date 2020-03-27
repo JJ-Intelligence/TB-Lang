@@ -193,7 +193,10 @@ step (Value e1, env, store, nextAddr, AddressExprFrame:kon) = step (Value $ VRef
 
 
 -- Function blocks ({ Expr }), which must have a 'return' statement.
-step (FuncBlock e1, env, store, nextAddr, kon) = step (e1, env, store, nextAddr, FuncBlockFrame:kon)
+step (FuncBlock e1, env, store, nextAddr, kon) = do
+    (Value e2, env', store', nextAddr', _) <- step (e1, env, store, nextAddr, FuncBlockFrame:[Done])
+    step (Value e2, env', store', nextAddr', kon)
+
 step (Return e1, env, store, nextAddr, kon) = step (e1, env, store, nextAddr, ReturnFrame:kon)
 step (Value e1, env, store, nextAddr, FuncBlockFrame:kon) = return (Value VNone, env, store, nextAddr, kon)
 
@@ -204,7 +207,7 @@ step (Value e1, env, store, nextAddr, ReturnFrame:kon) = return (Value e1, env, 
 step (FuncCall s ps, env, store, nextAddr, kon) = do
     (args, env', store', nextAddr') <- evaluateArgs ps env store nextAddr []
     (e1, env'', store'', nextAddr'') <- handleFuncArgs args env' store' nextAddr' s -- Pattern match
-    (Value e2, _, store''', _, _) <- step (e1, env'', store'', nextAddr'', ReturnFrame:kon) -- Recurse into function call.
+    (Value e2, _, store''', _, _) <- step (e1, env'', store'', nextAddr'', ReturnFrame:[Done]) -- Recurse into function call.
 
     step (Value e2, env', store''', nextAddr', kon) -- Continue after function call returns.
 
@@ -546,7 +549,6 @@ matchArgsToFunc store args (VFunc t ((ps,e1):xs)) = do
         else return (e1, fromJust ys, store')
 
         where
-
             matchParamToArg :: ExprValue -> ExprValue -> [(String, ExprValue)] -> Store -> IO (Maybe [(String, ExprValue)], Store)
             matchParamToArg (VList _ []) (VList _ []) ls store = return (Just ls, store)
             matchParamToArg (VList _ [VList _ []]) (VList _ []) ls store = return (Just ls, store)

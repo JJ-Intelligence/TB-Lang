@@ -29,7 +29,3 @@ process (LocalAssign (DefVar s e1), t, global, local) = (Value v, t', global', M
 
 
 
-
-
-
-process (e, global, local)
