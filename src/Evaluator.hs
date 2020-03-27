@@ -74,7 +74,7 @@ insertReserved env store = helper ls env (MapL.insert storedGlobalEnv (GlobalEnv
 startEvaluator :: Expr -> IO ()
 startEvaluator e = do
     s <- step (e, env, store, heapStart, [Done])
-    putStrLn $ "\nFinished evaluation.\n" ++ (show s)
+    putStrLn $ "\nFinished evaluation.\n"
         where 
             (env, store, heapStart) = insertReserved (Map.empty) (MapL.empty)
 
@@ -202,11 +202,11 @@ step (Value e1, env, store, nextAddr, ReturnFrame:kon) = return (Value e1, env, 
 
 -- User-defined function calls.
 step (FuncCall s ps, env, store, nextAddr, kon) = do
-    (args, store') <- evaluateArgs ps env store nextAddr []
-    (e1, env', store'', nextAddr') <- handleFuncArgs args env store' nextAddr s -- Pattern match
-    (Value e2, _, store''', _, _) <- step (e1, env', store'', nextAddr', ReturnFrame:kon) -- Recurse into function call.
+    (args, env', store', nextAddr') <- evaluateArgs ps env store nextAddr []
+    (e1, env'', store'', nextAddr'') <- handleFuncArgs args env' store' nextAddr' s -- Pattern match
+    (Value e2, _, store''', _, _) <- step (e1, env'', store'', nextAddr'', ReturnFrame:kon) -- Recurse into function call.
 
-    step (Value e2, env, store''', nextAddr, kon) -- Continue after function call returns.
+    step (Value e2, env', store''', nextAddr', kon) -- Continue after function call returns.
 
 -- Built-in functions.
 -- List (pass-by-value) operations:
@@ -456,6 +456,9 @@ step (Value (VList t xs), env, store, nextAddr, (BinOpH (BinConsOp (Value e1) en
                 isEmptyList TEmpty = True
                 isEmptyList (TList e1) = isEmptyList e1
                 isEmptyList _ = False
+
+        consTypes (TList e1) (TList e2) = TList (consTypes e1 e2)
+        consTypes TEmpty e@(TList e2) = e
         
         consTypes _ _ = TConflict
 
@@ -496,11 +499,11 @@ step s@(exp, env, store, nextAddr, kon) = error $ "ERROR evaluating expression "
 
 
 -- Evaluate arguments to an ExprValue.
-evaluateArgs :: Parameters -> Environment -> Store -> Address -> [ExprValue] -> IO ([ExprValue], Store)
-evaluateArgs FuncParamEnd env store nextAddr ls = return (ls, store)
+evaluateArgs :: Parameters -> Environment -> Store -> Address -> [ExprValue] -> IO ([ExprValue], Environment, Store, Address)
+evaluateArgs FuncParamEnd env store nextAddr ls = return (ls, env, store, nextAddr)
 evaluateArgs (FuncParam e1 e2) env store nextAddr ls = do
-    (Value e1',_,store',_,_) <- step (e1, env, store, nextAddr, [Done])
-    evaluateArgs e2 env store' nextAddr (ls ++ [e1'])
+    (Value e1',env',store',nextAddr',_) <- step (e1, env, store, nextAddr, [Done])
+    evaluateArgs e2 env' store' nextAddr' (ls ++ [e1'])
 
 
 -- Pattern matches a function parameters with some given arguments, returning the functions Expr value, as well as updated Env, Store, and next Address.
@@ -519,7 +522,7 @@ handleFuncArgs args env store nextAddr s = do
                     then (MapL.update (\x -> Just $ GlobalEnv env) storedGlobalEnv store') 
                     else (store') -- update Global Env
             let (env', store''', nextAddr') = 
-                    foldr (\(s, e2) (accEnv, accStore, addr) -> (overrideEnvStore accEnv accStore addr s e2)) (Map.empty, store'', nextAddr) xs
+                    foldl (\(accEnv, accStore, addr) (s, e2) -> (overrideEnvStore accEnv accStore addr s e2)) (Map.empty, store'', nextAddr) xs
 
             return (e1, env', store''', nextAddr')
 
@@ -538,8 +541,8 @@ matchArgsToFunc store args (VFunc t ((ps,e1):xs)) = do
 
                             ) (return (Just [], store)) (zip ps args)
 
-    if (length args /= length ps  || ys == Nothing) 
-        then matchArgsToFunc store' args (VFunc t xs) 
+    if (length args /= length ps  || ys == Nothing)
+        then matchArgsToFunc store' args (VFunc t xs)
         else return (e1, fromJust ys, store')
 
         where
@@ -659,14 +662,17 @@ getType store (VPointerList TParamList xs)
 
 getType store (VList t xs) = t
 getType store (VPointerList t xs) = t
+getType _ e = error (show e)
 
 evaluateListType :: Store -> [ExprValue] -> Type -> Type -- Used for checking list types of parameter lists
-evaluateListType store (x:xs) TParamList = evaluateListType store xs (getType store x)
+evaluateListType store [] t = t
 evaluateListType store ((VInt _):xs) TInt = evaluateListType store xs TInt
 evaluateListType store ((VBool _):xs) TBool = evaluateListType store xs TBool
 evaluateListType store ((VPointer _):xs) t@(TRef r) = evaluateListType store xs t
 evaluateListType store ((VVar _):xs) t = evaluateListType store xs t
 evaluateListType store (VNone:xs) TNone = evaluateListType store xs TNone
+evaluateListType store (x:xs) TParamList = evaluateListType store xs (getType store x)
+
 evaluateListType store ((VFunc t ds):xs) t'
     | t == t' = evaluateListType store xs t'
     | otherwise = TConflict
@@ -678,6 +684,7 @@ evaluateListType store ((VList t ys):xs) t'
 evaluateListType store ((VPointerList t ys):xs) t'
     | getType store (VPointerList t ys) == (TRef t') = evaluateListType store xs t'
     | otherwise = TConflict
+
 
 evaluateListType _ (_:xs) _ = TConflict
 
@@ -692,7 +699,12 @@ validType _ _ _ _ = False
 compareTypes :: [(String, TypeClass)] -> Type -> Type -> Bool
 compareTypes tc (TFunc [] out ftc) (TFunc [] out' ftc') = compareTypes tc out out'
 compareTypes tc (TFunc (p:ps) out ftc) (TFunc (p':ps') out' ftc') = compareTypes tc p p' && compareTypes tc (TFunc ps out ftc) (TFunc ps' out' ftc')
+compareTypes tc TEmpty TEmpty = True
+
+compareTypes tc _ TEmpty = True -- Unsure about this
+compareTypes tc (TList e1) (TList TEmpty) = True
 compareTypes tc (TList e1) (TList e2) = compareTypes tc e1 e2
+compareTypes tc (TList _) (TParamList) = True
 compareTypes tc (TRef e1) (TRef e2) = compareTypes tc e1 e2
 compareTypes tc (TGeneric s) e2
     | c == Nothing = True -- Generic can be anything
@@ -700,6 +712,7 @@ compareTypes tc (TGeneric s) e2
     where c = lookup s tc
 compareTypes tc (TIterable g) (TStream) = compareTypes tc g TInt
 compareTypes tc (TIterable g) (TList e2) = compareTypes tc g e2
+compareTypes tc (TIterable g) (TParamList) = True
 compareTypes tc e1 e2 = e1 == e2
 
 -- Check if a type is a child of a type class.
@@ -772,10 +785,11 @@ overrideEnvStore env store nextAddr s e1 = (Map.insert s nextAddr env, updateSto
 -- Binds a String (variable name) to an expression, updating the environment and store and returning them.
 updateEnvStore :: Environment -> Store -> Address -> String -> ExprValue -> (Environment, Store, Address)
 updateEnvStore env store nextAddr s e1 = (env', updateStore store addr e1, if lookupInEnv == Nothing then nextAddr+1 else nextAddr)
-    where lookupInEnv = Map.lookup s env
-          (env', addr) = case lookupInEnv of
-                                Just (a) -> (env, a)
-                                Nothing -> addToEnv env store nextAddr s
+    where 
+        lookupInEnv = Map.lookup s env
+        (env', addr) = case lookupInEnv of
+                Just (a) -> (env, a)
+                Nothing -> addToEnv env store nextAddr s
 
 -- Adds a new String to the Environment, and returns a tuple of the new Environment and the created Address.
 -- Assumes the String is not in the Environment.
@@ -791,8 +805,13 @@ updateStore :: Store -> Address -> ExprValue -> Store
 
 updateStore store a e@(VFunc ft [])
     | v == Nothing = MapL.insert a e store
-    | otherwise = error "Error, functions type has already been declared!" -- Change me to allow functions to be overriden by local functions of the same name!
-    where v = MapL.lookup a store
+    | isFunc (fromJust v) = error $ "Error, functions type has already been declared!\n" ++ "Trying to store function with type " ++ (show ft) ++ " in address " ++ (show a) ++ ".\n" ++ "But this function already exists here:  " ++ (show $ fromJust v) ++ "\n" ++ (show store)-- Change me to allow functions to be overriden by local functions of the same name!
+    | otherwise = MapL.insert a e store
+    where 
+        v = MapL.lookup a store
+
+        isFunc (VFunc _ _) = True
+        isFunc _ = False
 
 updateStore store a (VFuncUnTypedDef xs)
     | v == Nothing = error "Function type must be declared before the function definition!"

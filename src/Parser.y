@@ -107,26 +107,35 @@ E : E ';' E                         { Seq $1 $3 }
   | '&'E                            { AddressExpr $2 }
   | '*'E %prec POINT                { PointerExpr $2 }
   | FT                              { $1 }
-  | TL                              { ExprType $1 }
   | V                               { $1 }
   | B                               { $1 }
   | O                               { $1 }
   | C                               { $1 }
   | L                               { $1 }
 
-FT : '(' P ')' '->' E               { FuncType $2 $5 Nothing}
-   | '(' P ')' '->' E '~' '(' PC ')'{ FuncType $2 $5 (Just $8)}
+FT : '(' FTP ')' '->' FT               { FuncType $2 $5 Nothing }
+   | '(' FTP ')' '->' TL               { FuncType $2 (ExprType $5) Nothing }
+   | '(' FTP ')' '->' FT '~' '(' PC ')'{ FuncType $2 $5 (Just $8) }
+   | '(' FTP ')' '->' TL '~' '(' PC ')'{ FuncType $2 (ExprType $5) (Just $8) }
 
-TL : '[' ']'                        { TList TEmpty }
-   | '[' var ']'                    { TList $ TGeneric $2 }
+FTP : FT ',' FTP                       { FuncParam $1 $3 }
+    | FT                               { FuncParam $1 FuncParamEnd }
+    | TL ',' FTP                       { FuncParam (ExprType $1) $3 }
+    | TL                               { FuncParam (ExprType $1) FuncParamEnd }
+
+TL : '('TL')'                       { $2 }
+   | '[' ']'                        { TList TEmpty }
+   -- | '[' var ']'                    { TList $ TGeneric $2 }
    | '[' TL ']'                     { TList $2 }
-   | var'*'                         { TRef $ TGeneric $1 }
+   -- | var'*'                         { TRef $ TGeneric $1 }
    | TL'*'                          { TRef $1 }
    | tInt                           { TInt }
    | tBool                          { TBool }
    | tNone                          { TNone }
    | tStream                        { TStream }
-   | cItr var                       { TIterable $ TGeneric $2 }
+   -- | cItr var                       { TIterable $ TGeneric $2 }
+   | cItr TL                        { TIterable $2 }
+   | var                            { TGeneric $1 }
 
 PC : TC ',' PC                        { FuncParam $1 $3 }
    | TC                               { FuncParam $1 FuncParamEnd }

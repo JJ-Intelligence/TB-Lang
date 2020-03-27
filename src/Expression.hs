@@ -118,17 +118,18 @@ data ExprValue = VInt Int
 instance Show ExprValue where
   show (VInt n) = show n
   show (VBool b) = show b
-  show (VList _ []) = ""
-  show (VList _ [x]) = show x
-  show (VList t (x:xs)) = (show x) ++ "\n" ++ (show $ VList t xs)
-  show (VPointerList _ xs) = "VPointerList " ++ (show xs)
+  show (VList t xs) = "VList " ++ (show t) ++ " " ++ (show xs)
+  -- show (VList _ []) = ""
+  -- show (VList _ [x]) = show x
+  -- show (VList t (x:xs)) = (show x) ++ "\n" ++ (show $ VList t xs)
+  show (VPointerList t xs) = "VPointerList " ++ (show t) ++ " " ++ (show xs)
   show (VStream n xs) = "VStream " ++ (show n) ++ " " ++ (show xs)
   show VNone = "null"
   show (VFunc ts xs) = "VFunc " ++ (show ts) ++ " " ++ (show xs)
   show (VRef n) = "VRef " ++ (show n)
   show (GlobalEnv env) = "GlobalEnv " ++ (show env)
   show (VVar s) = "Var " ++ s
-  show (VPointer s) = "Var *" ++ s
+  show (VPointer s) = "VPointer " ++ s
 
 instance Ord ExprValue where
   (<) (VInt a) (VInt b) = a < b

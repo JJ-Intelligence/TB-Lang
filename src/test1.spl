@@ -1,26 +1,24 @@
 
--- type solve ([Int]*, [Int]) -> None
--- func solve (*[], *bs) = None; 
--- func solve (*[a], *bs) = out(a); 
--- func solve (*(x:y:as), *(z:bs)) = {
---     out ([x,y,z]);
---     solve (as, bs);
--- };
-
--- setIn([1,0]);
-
--- as = in(0);
--- bs = in(1);
-
--- solve (as,bs);
-
-
-
-type f (Int, Int*, Bool) -> Int;
-func f (x, *y, b) = {
-    out(x);
-    out(*y);
-    out(b);
+type solve ((Itr Int)*, (Itr Int)*) -> NoneType;
+func solve (*[], *bs) = None; 
+func solve (*[a], *bs) = out(a); 
+func solve (*(x:y:as), *(z:bs)) = {
+    out ([x,y,z]);
+    solve (as, bs);
 };
 
-x = f(4, &8, False);
+setIn([1,0]);
+
+as = in(0);
+bs = in(1);
+
+solve (as,bs);
+
+
+type f (a, a) -> Bool ~ (Eq a);
+func f (x, y) = x == y;
+
+out(f([1,2], [1,2]));
+
+
+-- Streams popping too many values!
