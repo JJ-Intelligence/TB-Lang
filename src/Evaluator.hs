@@ -153,18 +153,18 @@ step (LocalAssign (DefVar s (Func ps e1)), env, store, nextAddr, kon)
 
 -- Defining a new Var.
 -- Looks for the variable in the Env, and replaces it in the Store if it exists, else it creates it.
-step (LocalAssign (DefVar s e1), env, store, nextAddr, kon) = step (e1, env, store, nextAddr, (DefLocalVarFrame s env):kon)
-step (Value e1, env, store, nextAddr, (DefLocalVarFrame s env'):kon) = step (Value e1, env'', store', nextAddr', kon)
-    where (env'', store', nextAddr') = updateEnvStore env' store nextAddr s e1
+step (LocalAssign (DefVar s e1), env, store, nextAddr, kon) = step (e1, env, store, nextAddr, (DefLocalVarFrame s):kon)
+step (Value e1, env, store, nextAddr, (DefLocalVarFrame s):kon) = step (Value e1, env', store', nextAddr', kon)
+    where (env', store', nextAddr') = updateEnvStore env store nextAddr s e1
 
-step (GlobalAssign (DefVar s e1), env, store, nextAddr, kon) = step (e1, env, store, nextAddr, (DefGlobalVarFrame s env):kon) -- TODO FIXMEEE
-step (Value e1, env, store, nextAddr, (DefGlobalVarFrame s env'):kon) = step (Value e1, env', store', nextAddr, kon)
+step (GlobalAssign (DefVar s e1), env, store, nextAddr, kon) = step (e1, env, store, nextAddr, (DefGlobalVarFrame s):kon) -- TODO FIXMEEE
+step (Value e1, env, store, nextAddr, (DefGlobalVarFrame s):kon) = step (Value e1, env, store', nextAddr, kon)
     where store' = updateGlobalEnvInStore store s e1
 
 -- Defining a pointer variable.
-step (DefPointerVar s e1, env, store, nextAddr, kon) = step (e1, env, store, nextAddr, (DefPointerVarFrame s env):kon)
-step (Value e1, env, store, nextAddr, (DefPointerVarFrame s env'):kon)
-    | (isTRef val) = step (Value e1, env', store', nextAddr, kon)
+step (DefPointerVar s e1, env, store, nextAddr, kon) = step (e1, env, store, nextAddr, (DefPointerVarFrame s):kon)
+step (Value e1, env, store, nextAddr, (DefPointerVarFrame s):kon)
+    | (isTRef val) = step (Value e1, env, store', nextAddr, kon)
     | otherwise = error "Pointer is not a reference!"
     where val = lookupVar s env store
           (VRef r) = val

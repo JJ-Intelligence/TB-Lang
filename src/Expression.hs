@@ -18,7 +18,6 @@ data BinOpFrame = BinCompOp ExprComp Expr Environment -- Frame for a binary comp
                 | BinSeqOp Expr -- Frame for a binary sequence operation - e.g. [-] ; e2
                 | BinConsOp Expr Environment
                 | BinMathOp ExprMath Expr Environment
-                | BinParameters Expr Environment
                 | BinFuncCallFrame String Expr Environment
                 deriving (Eq, Show)
 
@@ -33,9 +32,9 @@ data Frame = HBinOp BinOpFrame
            | HTerOp TerOpFrame
            | TerOpH TerOpFrame
            | TerOp_H TerOpFrame
-           | DefLocalVarFrame String Environment
-           | DefGlobalVarFrame String Environment
-           | DefPointerVarFrame String Environment
+           | DefLocalVarFrame String
+           | DefGlobalVarFrame String
+           | DefPointerVarFrame String
            | AddressExprFrame
            | FuncCallFrame String
            | ReturnFrame
