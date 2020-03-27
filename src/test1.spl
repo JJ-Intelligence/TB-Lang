@@ -1,18 +1,9 @@
 
--- func solve (*(x:y:ys)) = {
---     out(x);
---     out(y);
---     out(*ys);
--- };
-
--- ys = in(0);
-
--- solve(ys);
-
--- Challenge 1, solution 1
-func solve ([], bs) = None; 
+type solve ((Itr Int)*, (Itr Int)*) -> NoneType;
+func solve (*[], *bs) = None; 
+func solve (*[a], *bs) = out(a); 
 func solve (*(x:y:as), *(z:bs)) = {
-    -- out ([x,y,z]);
+    out ([x,y,z]);
     solve (as, bs);
 };
 
@@ -22,3 +13,19 @@ as = in(0);
 bs = in(1);
 
 solve (as,bs);
+
+
+type f (a, a) -> Bool ~ (Eq a);
+func f (x, y) = x == y;
+
+out(f([1,2], [1,2]));
+
+v = {
+    k = 1;
+};
+    out(k);
+
+out(v);
+
+
+-- Error - k not in env outside of func block

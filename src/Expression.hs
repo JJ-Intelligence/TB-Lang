@@ -7,8 +7,7 @@ import qualified Data.IntMap.Lazy as MapL
 
 -- Environment - A mapping of functions and variables to Closures (which maps an Expression to an Environment).
 type Address = Int
-data Scope = Local | Global deriving (Eq, Show)
-type Environment = Map.Map String (Address, Scope)
+type Environment = Map.Map String Address
 type Store = MapL.IntMap ExprValue
 
 -- Kontinuation - A stack containing Frames showing what to do.
@@ -34,7 +33,8 @@ data Frame = HBinOp BinOpFrame
            | HTerOp TerOpFrame
            | TerOpH TerOpFrame
            | TerOp_H TerOpFrame
-           | DefVarFrame String Environment
+           | DefLocalVarFrame String Environment
+           | DefGlobalVarFrame String Environment
            | DefPointerVarFrame String Environment
            | AddressExprFrame
            | FuncCallFrame String
@@ -49,24 +49,33 @@ type State = (Expr, Environment, Store, Address, Kon)
 -- **Expression types**
 
 -- Data types.
-data Type = TInt 
+data Type = TFunc [Type] Type [(String, TypeClass)]
+          | TInt 
           | TBool 
           | TEmpty 
           | TNone
-          | TList
-          | TStream
-          | TRef
-          | TConflict deriving (Eq)
+          | TIterable Type -- TList and TStream are both iterable types. This takes in the type of the Stream/List.
+          | TList Type
+          | TStream -- Streams will always be of type Int.
+          | TRef Type
+          | TGeneric String
+          | TConflict
+          | TParamList
+          deriving (Eq)
 
 instance Show Type where 
+    show (TFunc ps out cs) = "TFunc " ++ (show ps) ++ " " ++ (show out) ++ " " ++ (show cs)
     show TInt = "Int"
     show TBool = "Boolean"
     show TEmpty = ""
     show TNone = "null"
-    show TList = "[]" 
+    show (TIterable t) = "TIterable " ++ (show t)
+    show (TList x) = "["++(show x)++"]" 
     show TStream = "Stream"
-    show TRef = "Reference"
+    show (TRef x) = "Ref " ++ (show x)
+    show (TGeneric s) = s
     show TConflict = "Conflict"
+    show TParamList = "TParamList"
 
 -- **Expression type returned by Parser**
 
@@ -96,11 +105,12 @@ data ExprValue = VInt Int
                | VBool Bool
                | VVar String
                | VPointer String
-               | VList [ ExprValue ]
-               | VPointerList [ ExprValue ]
+               | VList Type [ ExprValue ]
+               | VPointerList Type [ ExprValue ]
                | VStream Int [ ExprValue ]
                | VNone
-               | VFunc [ ([ExprValue], Expr) ]
+               | VFunc Type [([ExprValue], Expr)]
+               | VFuncUnTypedDef [([ExprValue], Expr)]
                | VRef Address
                | GlobalEnv Environment
                deriving (Eq)
@@ -108,17 +118,18 @@ data ExprValue = VInt Int
 instance Show ExprValue where
   show (VInt n) = show n
   show (VBool b) = show b
-  show (VList []) = ""
-  show (VList [x]) = show x
-  show (VList (x:xs)) = (show x) ++ "\n" ++ (show $ VList xs)
-  show (VPointerList xs) = "VPointerList " ++ (show xs)
+  show (VList t xs) = "VList " ++ (show t) ++ " " ++ (show xs)
+  -- show (VList _ []) = ""
+  -- show (VList _ [x]) = show x
+  -- show (VList t (x:xs)) = (show x) ++ "\n" ++ (show $ VList t xs)
+  show (VPointerList t xs) = "VPointerList " ++ (show t) ++ " " ++ (show xs)
   show (VStream n xs) = "VStream " ++ (show n) ++ " " ++ (show xs)
   show VNone = "null"
-  show (VFunc xs) = "VFunc " ++ (show xs)
+  show (VFunc ts xs) = "VFunc " ++ (show ts) ++ " " ++ (show xs)
   show (VRef n) = "VRef " ++ (show n)
   show (GlobalEnv env) = "GlobalEnv " ++ (show env)
   show (VVar s) = "Var " ++ s
-  show (VPointer s) = "Var *" ++ s
+  show (VPointer s) = "VPointer " ++ s
 
 instance Ord ExprValue where
   (<) (VInt a) (VInt b) = a < b
@@ -185,19 +196,32 @@ data Parameters = FuncParam Expr Parameters
 --   show (FuncParam e1 e2) = (show e1) ++ ", " ++ (show e2)
 --   show (FuncParamEnd) = ""
 
+data Assignment = DefVar String Expr
+                deriving (Eq, Show)
+
+data TypeClass = CEq
+               | CItr
+               | COrd
+               deriving (Eq, Show)
+
 data Expr = If Expr Expr (Maybe ExprElif)
           | While Expr Expr
           | For Expr Expr Expr Expr
           | Func Parameters Expr
+          | FuncType Parameters Expr (Maybe Parameters) -- Maybe Parameters are the Type constraints
+          | ExprType Type
+          | TypeConstraint TypeClass String
           | Return Expr
           | FuncCall String Parameters
           | Literal ExprLiteral
           | Value ExprValue
           | Op BinOp
+          | LocalAssign Assignment
+          | GlobalAssign Assignment
           | DefPointerVar String Expr
           | PointerExpr Expr
           | AddressExpr Expr
-          | DefVar String Expr
+          | GlobalVar String
           | Var String
           | Seq Expr Expr
           | FuncBlock Expr

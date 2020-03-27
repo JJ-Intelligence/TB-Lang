@@ -19,6 +19,8 @@ tokens :-
     else                                { \p s -> TokenElse p }
     while                               { \p s -> TokenWhile p }
     func                                { \p s -> TokenFuncDef p }
+    type                                { \p _ -> TokenFuncType p }
+    \-\>                                { \p _ -> TokenReturnTypeArrow p }
     return                              { \p s -> TokenReturn p }
     for                                 { \p s -> TokenFor p }
 
@@ -57,14 +59,24 @@ tokens :-
     \*                                  { \p _ -> TokenStar p }
     \&                                  { \p _ -> TokenAddress p }
 
+    Int                                 { \p _ -> TokenTypeInt p }
+    Bool                                { \p _ -> TokenTypeBool p }
+    NoneType                            { \p _ -> TokenTypeNone p }
+    Stream                              { \p _ -> TokenTypeStream p }
+
+    Eq                                  { \p _ -> TokenTypeConstraintEq p }
+    Itr                                 { \p _ -> TokenTypeConstraintItr p }
+    Ord                                 { \p _ -> TokenTypeConstraintOrd p }
+    \~                                  { \p _ -> TokenTypeConstraintTwiddle p }
+
     $digit+                             { \p s -> TokenInt (read s) p }
     True                                { \p s -> TokenBool True p }
     False                               { \p s -> TokenBool False p }
     None                                { \p _ -> TokenNone p }
 
+    global                              { \p _ -> TokenGlobal p }
     [$alpha \_] [$alpha $digit \_]*     { \p s -> TokenVar s p }
 
- 
 {
 
 -- Lexeme Tokens.
@@ -75,6 +87,8 @@ data Token =  TokenIf               {pos :: AlexPosn}
             | TokenWhile            {pos :: AlexPosn}
             | TokenFor              {pos :: AlexPosn}
 
+            | TokenReturnTypeArrow  {pos :: AlexPosn}
+            | TokenFuncType         {pos :: AlexPosn}
             | TokenFuncDef          {pos :: AlexPosn}
             | TokenReturn           {pos :: AlexPosn}
             
@@ -113,10 +127,21 @@ data Token =  TokenIf               {pos :: AlexPosn}
             | TokenStar             {pos :: AlexPosn}
             | TokenAddress          {pos :: AlexPosn}
 
+            | TokenTypeInt          {pos :: AlexPosn}
+            | TokenTypeBool         {pos :: AlexPosn}
+            | TokenTypeNone         {pos :: AlexPosn}
+            | TokenTypeStream       {pos :: AlexPosn}
+
+            | TokenTypeConstraintEq {pos :: AlexPosn}
+            | TokenTypeConstraintItr {pos :: AlexPosn}
+            | TokenTypeConstraintOrd {pos :: AlexPosn}
+            | TokenTypeConstraintTwiddle {pos :: AlexPosn}
+
             | TokenInt              {int :: Int, pos :: AlexPosn}
             | TokenBool             {bool :: Bool, pos :: AlexPosn}
             | TokenNone             {pos :: AlexPosn}
 
+            | TokenGlobal           {pos :: AlexPosn}
             | TokenVar              {name :: String, pos :: AlexPosn} 
             deriving (Eq) 
 
@@ -128,6 +153,8 @@ instance Show Token where
 
     show (TokenWhile _) = "while "
 
+    show (TokenReturnTypeArrow _) = "-> "
+    show (TokenFuncType _) = "type "
     show (TokenFuncDef _) = "func "
     show (TokenReturn _) = "return "
 
@@ -156,10 +183,21 @@ instance Show Token where
     show (TokenStar _) = "* "
     show (TokenAddress _) = "&"
 
+    show (TokenTypeInt _) = "Int"
+    show (TokenTypeBool _) = "Bool"
+    show (TokenTypeNone _) = "NoneType"
+    show (TokenTypeStream _) = "Stream"
+
+    show (TokenTypeConstraintEq _) = "Eq "
+    show (TokenTypeConstraintItr _) = "Itr "
+    show (TokenTypeConstraintOrd _) = "Ord "
+    show (TokenTypeConstraintTwiddle _) = "~ "
+
     show (TokenInt n _) = (show n) ++ " "
     show (TokenBool b _) = (show b) ++ " "
     show (TokenNone _) = "None "
 
+    show (TokenGlobal _) = "global "
     show (TokenVar s _) = s ++ " "
 
 tokenPosn :: Token -> (Int, Int)

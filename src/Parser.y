@@ -15,6 +15,8 @@ import Expression
     while  { TokenWhile _ }
     for    { TokenFor _ }
 
+    '->'   { TokenReturnTypeArrow _ }
+    type   { TokenFuncType _ }
     func   { TokenFuncDef _ }
     return { TokenReturn _ }
 
@@ -53,13 +55,26 @@ import Expression
     '*'    { TokenStar _ }
     '&'    { TokenAddress _ }
 
+    tInt   { TokenTypeInt _ }
+    tBool  { TokenTypeBool _ }
+    tNone  { TokenTypeNone _ }
+    tStream { TokenTypeStream _ }
+
+    cEq    {TokenTypeConstraintEq _ }
+    cItr   {TokenTypeConstraintItr _ }
+    cOrd   {TokenTypeConstraintOrd _ }
+    '~'    {TokenTypeConstraintTwiddle _ }
+
     int    { TokenInt $$ _ }
     bool   { TokenBool $$ _ }
     none   { TokenNone _ }
 
+    global { TokenGlobal _ }
     var    { TokenVar $$ _ }
 
 %right ';'
+%right '->' -- unsure about this
+%left '~' -- unsure about this
 %left '=' '+=' '-=' '*=' '/=' '^=' '&=' '|='
 %right ':'
 %left or
@@ -78,34 +93,71 @@ E : E ';' E                         { Seq $1 $3 }
   | if '(' E ')' B EElif            { If $3 $5 (Just $6) }
   | if '(' E ')' B                  { If $3 $5 Nothing }
   | for '(' E ';' E ';' E ')' B     { For $3 $5 $7 $9 }
-  | func var '(' P ')' '=' E        { DefVar $2 (Func $4 $7) }
-  | func var '(' ')' '=' E          { DefVar $2 (Func FuncParamEnd $6) }
+  | type var FT                     { LocalAssign $ DefVar $2 $3 }
+  | func var '(' P ')' '=' E        { LocalAssign $ DefVar $2 (Func $4 $7) }
+  | func var '(' ')' '=' E          { LocalAssign $ DefVar $2 (Func FuncParamEnd $6) }
   | return '(' E ')'                { Return $3 }
   | return '(' ')'                  { Return (Literal ENone) }
   | var '(' P ')'                   { FuncCall $1 $3 }
   | var '('')'                      { FuncCall $1 FuncParamEnd }
-  | var '++'                        { FuncBlock (Seq (DefVar $1 (Op (MathOp Plus (Var $1) (Literal $ EInt 1)))) (Return (Op (MathOp Min (Var $1) (Literal $ EInt 1))))) }
-  | var '--'                        { FuncBlock (Seq (DefVar $1 (Op (MathOp Min (Var $1) (Literal $ EInt 1)))) (Return (Op (MathOp Plus (Var $1) (Literal $ EInt 1))))) }
-  | '++' var                        { DefVar $2 (Op (MathOp Plus (Var $2) (Literal $ EInt 1))) }
-  | '--' var                        { DefVar $2 (Op (MathOp Min (Var $2) (Literal $ EInt 1))) }
+  -- | var '++'                        { FuncBlock (Seq (DefVar $1 (Op (MathOp Plus (Var $1) (Literal $ EInt 1)))) (Return (Op (MathOp Min (Var $1) (Literal $ EInt 1))))) }
+  -- | var '--'                        { FuncBlock (Seq (DefVar $1 (Op (MathOp Min (Var $1) (Literal $ EInt 1)))) (Return (Op (MathOp Plus (Var $1) (Literal $ EInt 1))))) }
+  -- | '++' var                        { DefVar $2 (Op (MathOp Plus (Var $2) (Literal $ EInt 1))) }
+  -- | '--' var                        { DefVar $2 (Op (MathOp Min (Var $2) (Literal $ EInt 1))) }
   | '&'E                            { AddressExpr $2 }
   | '*'E %prec POINT                { PointerExpr $2 }
+  | FT                              { $1 }
   | V                               { $1 }
   | B                               { $1 }
   | O                               { $1 }
   | C                               { $1 }
   | L                               { $1 }
 
-V : '*'var '=' E                    { DefPointerVar $2 $4 }
-  | var '+=' E                      { DefVar $1 (Op (MathOp Plus (Var $1) $3)) }
-  | var '-=' E                      { DefVar $1 (Op (MathOp Min (Var $1) $3)) }
-  | var '*=' E                      { DefVar $1 (Op (MathOp Mult (Var $1) $3)) }
-  | var '/=' E                      { DefVar $1 (Op (MathOp Div (Var $1) $3)) }
-  | var '^=' E                      { DefVar $1 (Op (MathOp Exp (Var $1) $3)) }
-  | var '&=' E                      { DefVar $1 (Op (CompOp And (Var $1) $3)) }
-  | var '|=' E                      { DefVar $1 (Op (CompOp Or (Var $1) $3)) }
-  | var '=' E                       { DefVar $1 $3 }
+FT : '(' FTP ')' '->' FT               { FuncType $2 $5 Nothing }
+   | '(' FTP ')' '->' TL               { FuncType $2 (ExprType $5) Nothing }
+   | '(' FTP ')' '->' FT '~' '(' PC ')'{ FuncType $2 $5 (Just $8) }
+   | '(' FTP ')' '->' TL '~' '(' PC ')'{ FuncType $2 (ExprType $5) (Just $8) }
+
+FTP : FT ',' FTP                       { FuncParam $1 $3 }
+    | FT                               { FuncParam $1 FuncParamEnd }
+    | TL ',' FTP                       { FuncParam (ExprType $1) $3 }
+    | TL                               { FuncParam (ExprType $1) FuncParamEnd }
+
+TL : '('TL')'                       { $2 }
+   | '[' ']'                        { TList TEmpty }
+   -- | '[' var ']'                    { TList $ TGeneric $2 }
+   | '[' TL ']'                     { TList $2 }
+   -- | var'*'                         { TRef $ TGeneric $1 }
+   | TL'*'                          { TRef $1 }
+   | tInt                           { TInt }
+   | tBool                          { TBool }
+   | tNone                          { TNone }
+   | tStream                        { TStream }
+   -- | cItr var                       { TIterable $ TGeneric $2 }
+   | cItr TL                        { TIterable $2 }
+   | var                            { TGeneric $1 }
+
+PC : TC ',' PC                        { FuncParam $1 $3 }
+   | TC                               { FuncParam $1 FuncParamEnd }
+
+TC : cEq var                        { TypeConstraint CEq $2 }
+   | cItr var                       { TypeConstraint CItr $2 }
+   | cOrd var                       { TypeConstraint COrd $2 }
+
+V : global GV                       { GlobalAssign $2 }
+  | GV                              { LocalAssign $1 }
+  | '*'var '=' E                    { DefPointerVar $2 $4 }
+  | global var                      { GlobalVar $2 }
   | var                             { Var $1 }
+
+GV : var '+=' E                      { DefVar $1 (Op (MathOp Plus (Var $1) $3)) }
+   | var '-=' E                      { DefVar $1 (Op (MathOp Min (Var $1) $3)) }
+   | var '*=' E                      { DefVar $1 (Op (MathOp Mult (Var $1) $3)) }
+   | var '/=' E                      { DefVar $1 (Op (MathOp Div (Var $1) $3)) }
+   | var '^=' E                      { DefVar $1 (Op (MathOp Exp (Var $1) $3)) }
+   | var '&=' E                      { DefVar $1 (Op (CompOp And (Var $1) $3)) }
+   | var '|=' E                      { DefVar $1 (Op (CompOp Or (Var $1) $3)) }
+   | var '=' E                       { DefVar $1 $3 }
 
 P : E ',' P                         { FuncParam $1 $3 }
   | E                               { FuncParam $1 FuncParamEnd }
