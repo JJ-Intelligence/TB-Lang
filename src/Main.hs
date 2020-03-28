@@ -14,6 +14,7 @@ main = do args <- getArgs
                     print "Parsed: "
                     print xs
                     putStr "\n"
+                    print "Preprocessing: "
                     preprocess xs
                     print "Evaluating: "
                     startEvaluator xs
