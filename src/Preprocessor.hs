@@ -85,7 +85,6 @@ process (Op (Cons e1 e2)) (global, local) = do
         consTypes _ _ = TConflict
 
 
--- Make dodgy assumption that MathOps all return ints - don't judge me josh
 process (Op (MathOp Plus e1 e2)) (global, local) = do
     (t1, (global1, local1)) <- process e1 (global, local)
     (t2, (global2, local2)) <- process e2 (global1, local1)
@@ -146,12 +145,19 @@ process (Op (MathOp Plus e1 e2)) (global, local) = do
 process (Op (MathOp op e1 e2)) (global, local)= do
     (t1, (global1, local1)) <- process e1 (global, local)
     (t2, (global2, local2)) <- process e2 (global1, local1)
-    if length t1 == 1 && t1!!0 /= TInt
+    if length t1 /= 1 || length t2 /= 1
+        then do
+            printStdErr ("ERROR: ambiguous types for: "++(show (Op (MathOp op e1 e2))))
+            exitFailure
+        else
+            return()
+
+    if t1!!0 /= TInt
         then do
             printStdErr ("ERROR: type invalid for op: "++(show (Op (MathOp op e1 e2))))
             exitFailure
         else return ()
-    if length t2 == 1 && t2!!0 /= TInt
+    if t2!!0 /= TInt
         then do
             printStdErr ("ERROR: type invalid for op: "++(show (Op (MathOp op e1 e2))))
             exitFailure
@@ -159,7 +165,44 @@ process (Op (MathOp op e1 e2)) (global, local)= do
     return ([TInt], (global2, local2))
 
 
--- TODO implement others
+process (Op (CompOp op e1 e2)) (global, local)= do
+    (t1, (global1, local1)) <- process e1 (global, local)
+    (t2, (global2, local2)) <- process e2 (global1, local1)
+    if length t1 /= 1 || length t2 /= 1
+        then do
+            printStdErr ("ERROR: ambiguous types for: "++(show (Op (CompOp op e1 e2))))
+            exitFailure
+        else
+            return()
+    case op==And || op==Or of
+        True -> do
+            if (head t1) /= TBool || (head t2) /= TBool
+                then do
+                    printStdErr ("ERROR: type invalid for op: "++(show (Op (CompOp op e1 e2))))
+                    exitFailure
+                else return ()
+        False -> do
+            case op==Equality of -- TODO add NOT equals and NOT
+                True -> do
+                    if isChildOf (head t1) CEq && isChildOf (head t2) CEq && (compareTypes [] (head t1) (head t2))
+                        then return ()
+                        else do
+                            printStdErr ("ERROR: type invalid for op: "++(show (Op (CompOp op e1 e2))))
+                            exitFailure
+                False -> do
+                    putStrLn (show t1)
+                    putStrLn (show t2)
+                    putStrLn (show $ compareTypes [] (head t1) (head t2))
+                    if isChildOf (head t1) COrd && isChildOf (head t2) COrd && (compareTypes [] (head t1) (head t2))
+                        then return ()
+                        else do
+                            printStdErr ("ERROR: type invalid for op: "++(show (Op (CompOp op e1 e2))))
+                            exitFailure
+    return ([TBool], (global2, local2))
+
+process ()
+
+
 process e s = return ([TNone], s)
 
 mergeTList :: [Type] -> [Type] -> [Type]
