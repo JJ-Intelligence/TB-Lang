@@ -36,6 +36,8 @@ process (LocalAssign (DefVar s e1)) (global, local) = do
     if lv /= Nothing && (length (fromJust lv) /= 1 || (fromJust lv) /= t')
         then printStdErr ("WARNING: ambiguous types for: "++(show s) ++ " in " ++ (show (LocalAssign (DefVar s e1))))
         else return ()
+
+    putStrLn (show t')
     return (t', (global', Map.insert s t' local'))
 
 process (Var s) state = do
@@ -190,9 +192,6 @@ process (Op (CompOp op e1 e2)) (global, local)= do
                             printStdErr ("ERROR: type invalid for op: "++(show (Op (CompOp op e1 e2))))
                             exitFailure
                 False -> do
-                    putStrLn (show t1)
-                    putStrLn (show t2)
-                    putStrLn (show $ compareTypes [] (head t1) (head t2))
                     if isChildOf (head t1) COrd && isChildOf (head t2) COrd && (compareTypes [] (head t1) (head t2))
                         then return ()
                         else do
@@ -200,10 +199,42 @@ process (Op (CompOp op e1 e2)) (global, local)= do
                             exitFailure
     return ([TBool], (global2, local2))
 
-process ()
+process (If c e1 e2) (global, local) = do
+    (tc, (global', local')) <- process c (global, local)
 
+    if length tc /= 1 || (head tc) /= TBool then do
+        printStdErr ("ERROR: expected boolean: "++(show (If c e1 e2)))
+        exitFailure
+    else return ()
 
-process e s = return ([TNone], s)
+    (t1, (global_, local_)) <- process e1 (global', local')
+    let (global1, local1) = unionStates (global_, local_) (global', local')
+
+    case e2 of
+        Just (Elif c' e1' e2') -> do
+            (t2, (global2, local2)) <- process (If c' e1' e2') (global', local')
+            putStrLn (show $ unionStates (global1, local1) (global2, local2))
+            return ([TNone], unionStates (global1, local1) (global2, local2))
+        Just (Else e) -> do
+            (t2, (global2, local2)) <- process e (global', local')
+            putStrLn (show $ unionStates (global1, local1) (global2, local2))
+            return ([TNone], unionStates (global1, local1) (global2, local2))
+        _ -> do
+            putStrLn (show (global1, local1))
+            return ([TNone], (global1, local1))
+
+    where
+        unionStates :: ProcessState -> ProcessState -> ProcessState
+        unionStates (global1, local1) (global2, local2) = (Map.unionWith (unionLists) global1 global2, Map.unionWith (unionLists) local1 local2)
+           where
+               unionLists [] ys = ys
+               unionLists (x:xs) (ys)
+                   | x `elem` ys = unionLists xs ys
+                   | otherwise = unionLists xs (x:ys)
+
+process (FuncBlock e1) (global, local) = process e1 (global, local)
+
+--process e s = return ([TNone], s)
 
 mergeTList :: [Type] -> [Type] -> [Type]
 mergeTList t1 t2 = [x | x <- t1, not (x `elem` t2)] ++ t2
