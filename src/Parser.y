@@ -87,31 +87,31 @@ import Expression
 %right POINT '&'
 %%
 
-E : E ';' E                         { Seq $1 $3 }
-  | E ';'                           { $1 }
-  | while '(' E ')' B               { While $3 $5 }
-  | if '(' E ')' B EElif            { If $3 $5 (Just $6) }
-  | if '(' E ')' B                  { If $3 $5 Nothing }
-  | for '(' E ';' E ';' E ')' B     { For $3 $5 $7 $9 }
-  | type var FT                     { LocalAssign $ DefVar $2 $3 }
-  | func var '(' P ')' '=' E        { LocalAssign $ DefVar $2 (Func $4 $7) }
-  | func var '(' ')' '=' E          { LocalAssign $ DefVar $2 (Func FuncParamEnd $6) }
-  | return '(' E ')'                { Return $3 }
-  | return '(' ')'                  { Return (Literal ENone) }
-  | var '(' P ')'                   { FuncCall $1 $3 }
-  | var '('')'                      { FuncCall $1 FuncParamEnd }
-  -- | var '++'                        { FuncBlock (Seq (DefVar $1 (Op (MathOp Plus (Var $1) (Literal $ EInt 1)))) (Return (Op (MathOp Min (Var $1) (Literal $ EInt 1))))) }
-  -- | var '--'                        { FuncBlock (Seq (DefVar $1 (Op (MathOp Min (Var $1) (Literal $ EInt 1)))) (Return (Op (MathOp Plus (Var $1) (Literal $ EInt 1))))) }
-  -- | '++' var                        { DefVar $2 (Op (MathOp Plus (Var $2) (Literal $ EInt 1))) }
-  -- | '--' var                        { DefVar $2 (Op (MathOp Min (Var $2) (Literal $ EInt 1))) }
-  | '&'E                            { AddressExpr $2 }
-  | '*'E %prec POINT                { PointerExpr $2 }
-  | FT                              { $1 }
-  | V                               { $1 }
-  | B                               { $1 }
-  | O                               { $1 }
-  | C                               { $1 }
-  | L                               { $1 }
+E : E ';' E                                 { Seq $1 $3 }
+  | E ';'                                   { $1 }
+  | while '(' E ')' '{' E '}'               { While $3 $6 }
+  | if '(' E ')' '{' E '}' EElif            { If $3 $6 (Just $8) }
+  | if '(' E ')' '{' E '}'                  { If $3 $6 Nothing }
+  | for '(' E ';' E ';' E ')' '{' E '}'     { For $3 $5 $7 $10 }
+  | type var FT                             { LocalAssign $ DefVar $2 $3 }
+  | func var '(' P ')' '=' E                { LocalAssign $ DefVar $2 (Func $4 $7) }
+  | func var '(' ')' '=' E                  { LocalAssign $ DefVar $2 (Func FuncParamEnd $6) }
+  | return '(' E ')'                        { Return $3 }
+  | return '(' ')'                          { Return (Literal ENone) }
+  | var '(' P ')'                           { FuncCall $1 $3 }
+  | var '('')'                              { FuncCall $1 FuncParamEnd }
+  -- | var '++'                             { FuncBlock (Seq (DefVar $1 (Op (MathOp Plus (Var $1) (Literal $ EInt 1)))) (Return (Op (MathOp Min (Var $1) (Literal $ EInt 1))))) }
+  -- | var '--'                             { FuncBlock (Seq (DefVar $1 (Op (MathOp Min (Var $1) (Literal $ EInt 1)))) (Return (Op (MathOp Plus (Var $1) (Literal $ EInt 1))))) }
+  -- | '++' var                             { DefVar $2 (Op (MathOp Plus (Var $2) (Literal $ EInt 1))) }
+  -- | '--' var                             { DefVar $2 (Op (MathOp Min (Var $2) (Literal $ EInt 1))) }
+  | '&'E                                    { AddressExpr $2 }
+  | '*'E %prec POINT                        { PointerExpr $2 }
+  | FT                                      { $1 }
+  | V                                       { $1 }
+  | B                                       { $1 }
+  | O                                       { $1 }
+  | C                                       { $1 }
+  | L                                       { $1 }
 
 FT : '(' FTP ')' '->' FT               { FuncType $2 $5 Nothing }
    | '(' FTP ')' '->' TL               { FuncType $2 (ExprType $5) Nothing }

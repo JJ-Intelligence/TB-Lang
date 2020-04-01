@@ -233,15 +233,17 @@ process (While c e1) (global, local) = do
 
     (t1, (global2, local2)) <- process e1 (global1, local1)
     
-    return ([VNone], unionStates (global1, local1) (global2, local2))
+    return ([TNone], unionStates (global1, local1) (global2, local2))
 
 
 process (FuncBlock e1) (global, local) = process e1 (global, local)
 
---process e s = return ([TNone], s)
+process e s = return ([TNone], s)
+
+--process a b = return ([VNone], b)
 
 -- [Type] is the list of return types of this func block - should return a singleton at the end, else there's a type conflict.
-processFuncBlock :: Expr -> ProcessState -> [Type] -> IO ([Type], ProcessState, [Type])
+--processFuncBlock :: Expr -> ProcessState -> [Type] -> IO ([Type], ProcessState, [Type])
 
 
 
