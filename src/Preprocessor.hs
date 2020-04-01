@@ -223,18 +223,35 @@ process (If c e1 e2) (global, local) = do
             putStrLn (show (global1, local1))
             return ([TNone], (global1, local1))
 
-    where
-        unionStates :: ProcessState -> ProcessState -> ProcessState
-        unionStates (global1, local1) (global2, local2) = (Map.unionWith (unionLists) global1 global2, Map.unionWith (unionLists) local1 local2)
-           where
-               unionLists [] ys = ys
-               unionLists (x:xs) (ys)
-                   | x `elem` ys = unionLists xs ys
-                   | otherwise = unionLists xs (x:ys)
+process (While c e1) (global, local) = do
+    (tc, (global1, local1)) <- process c (global, local)
+
+    if length tc /= 1 || (head tc) /= TBool then do
+        printStdErr ("ERROR: expected boolean in while loop condition: "++(show (While c e1)))
+        exitFailure
+    else return ()
+
+    (t1, (global2, local2)) <- process e1 (global1, local1)
+    
+    return ([VNone], unionStates (global1, local1) (global2, local2))
+
 
 process (FuncBlock e1) (global, local) = process e1 (global, local)
 
 --process e s = return ([TNone], s)
+
+-- [Type] is the list of return types of this func block - should return a singleton at the end, else there's a type conflict.
+processFuncBlock :: Expr -> ProcessState -> [Type] -> IO ([Type], ProcessState, [Type])
+
+
+
+unionStates :: ProcessState -> ProcessState -> ProcessState
+unionStates (global1, local1) (global2, local2) = (Map.unionWith (unionLists) global1 global2, Map.unionWith (unionLists) local1 local2)
+   where
+       unionLists [] ys = ys
+       unionLists (x:xs) (ys)
+           | x `elem` ys = unionLists xs ys
+           | otherwise = unionLists xs (x:ys)
 
 mergeTList :: [Type] -> [Type] -> [Type]
 mergeTList t1 t2 = [x | x <- t1, not (x `elem` t2)] ++ t2
@@ -248,6 +265,7 @@ lookupT name (global, local)
         lLookup = Map.lookup name local
         gLookup = Map.lookup name global
 
+printStdErr :: String -> IO ()
 printStdErr s = do
     hPutStrLn stderr s
     return ()
