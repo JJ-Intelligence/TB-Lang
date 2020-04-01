@@ -95,19 +95,7 @@ step (Value e1, env, store, nextAddr, (HBinOp (BinSeqOp e2)):kon) = step (e2, en
 step (LocalAssign (DefVar s (FuncType ps out cs)), env, store, nextAddr, kon) = step (Value VNone, env', store', nextAddr', kon)
     where
         (env', store', nextAddr') = updateEnvStore env store nextAddr s (VFunc ft [])
-        ft = buildTFunc ps out cs
-
-        evaluateParams FuncParamEnd = []
-        evaluateParams (FuncParam (FuncType ps' out' cs') e3) = buildTFunc ps' out' cs' : evaluateParams e3
-        evaluateParams (FuncParam (ExprType t) e3) = t : evaluateParams e3
-
-        evaluateOut (ExprType t) = t
-        evaluateOut (FuncType ps' out' cs') = buildTFunc ps' out' cs'
-
-        evaluateConstraints FuncParamEnd = []
-        evaluateConstraints (FuncParam (TypeConstraint cl g) e3) = (g, cl) : evaluateConstraints e3
-
-        buildTFunc ps out cs = TFunc (evaluateParams ps) (evaluateOut out) (if cs == Nothing then [] else evaluateConstraints $ fromJust cs)
+        ft = evaluateFuncType (FuncType ps out cs)
 
 -- Defining a new Function.
 step (LocalAssign (DefVar s (Func ps e1)), env, store, nextAddr, kon)
@@ -372,7 +360,7 @@ step (Value (VInt n'), env', store, nextAddr, (BinOpH (BinMathOp op (Value (VInt
                     Min -> n - n'
                     Mult -> n * n'
                     Div -> n `div` n'
-                    Exp -> n ^ n'
+                    Exp -> n ^ n' 
                     Mod -> n `mod` n'
 
 -- Adding 2 lists together.
@@ -664,6 +652,7 @@ getType store (VPointerList TParamList xs)
 
 getType store (VList t xs) = t
 getType store (VPointerList t xs) = t
+getType store (VFunc t xs) = t
 getType _ e = error (show e)
 
 evaluateListType :: Store -> [ExprValue] -> Type -> Type -- Used for checking list types of parameter lists
@@ -737,6 +726,22 @@ isChildOf _ CItr = False
 isChildOf TInt COrd = True
 isChildOf (TList e1) COrd = isChildOf e1 COrd
 isChildOf _ COrd = False
+
+-- Build a function type.
+evaluateFuncType :: Expr -> Type 
+evaluateFuncType (FuncType ps out cs) = buildTFunc ps out cs
+    where
+        buildTFunc ps out cs = TFunc (evaluateParams ps) (evaluateOut out) (if cs == Nothing then [] else evaluateConstraints $ fromJust cs)
+
+        evaluateParams FuncParamEnd = []
+        evaluateParams (FuncParam (FuncType ps' out' cs') e3) = buildTFunc ps' out' cs' : evaluateParams e3
+        evaluateParams (FuncParam (ExprType t) e3) = t : evaluateParams e3
+
+        evaluateOut (ExprType t) = t
+        evaluateOut (FuncType ps' out' cs') = buildTFunc ps' out' cs'
+
+        evaluateConstraints FuncParamEnd = []
+        evaluateConstraints (FuncParam (TypeConstraint cl g) e3) = (g, cl) : evaluateConstraints e3
 
 
 -- Lookup a variable in the Environment (if not in local env, then search global env) and Store. 

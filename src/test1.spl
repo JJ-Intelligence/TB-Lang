@@ -1,5 +1,9 @@
-out({
-    while (True) {
 
-    }
-})
+{
+    x = 1;
+    if (True) {
+        return (1);
+    } else {
+        return (True);
+    };
+}

@@ -163,9 +163,9 @@ P : E ',' P                         { FuncParam $1 $3 }
   | E                               { FuncParam $1 FuncParamEnd }
 
 -- Elif part of an If statement.
-EElif : elif '(' E ')' B EElif      { Elif $3 $5 (Just $6) }
-      | elif '(' E ')' B            { Elif $3 $5 Nothing }
-      | else B                      { Else $2 }
+EElif : elif '(' E ')' '{' E '}' EElif  { Elif $3 $6 (Just $8) }
+      | elif '(' E ')' '{' E '}'        { Elif $3 $6 Nothing }
+      | else '{' E '}'                  { Else $3 }
 
 -- Function block.
 B : '{' E '}'                       { FuncBlock $2 }
