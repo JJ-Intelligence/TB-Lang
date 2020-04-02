@@ -1,9 +1,10 @@
 
-{
-    x = 1;
-    if (True) {
-        return (1);
-    } else {
-        return (True);
-    };
-}
+type f ([a], [b]) -> b ~ (Eq b);
+func f (a:as, b:bs) = {
+    out(1);
+    return([b]);
+};
+
+
+-- [TList a, TList b] ~ [(b, CEq)]
+-- [[a,as], [b,bs]]

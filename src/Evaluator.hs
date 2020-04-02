@@ -407,21 +407,21 @@ step (Value e2, env', store, nextAddr, (BinOpH (BinCompOp Or (Value e1) env)):ko
 
 -- Comparison <, >, == operations.
 step (Value e1, env', store, nextAddr, (BinOpH (BinCompOp LessThan (Value e2) env)):kon) 
-    | isChildOf t1 COrd && isChildOf t2 COrd && t1 == t2 = step (Value $ VBool $ e1 < e2, env, store, nextAddr, kon)
+    | isChildOf [] t1 ([], COrd) && isChildOf [] t2 ([], COrd) && t1 == t2 = step (Value $ VBool $ e1 < e2, env, store, nextAddr, kon)
     | otherwise = error $ "Type error \n" ++ (show $ Value e1)++"\n"++(show LessThan)++"\n"++(show $ Value e2) ++"\nInteger"
     where
         t1 = getType store e1
         t2 = getType store e2
 
 step (Value e1, env', store, nextAddr, (BinOpH (BinCompOp GreaterThan (Value e2) env)):kon) 
-    | isChildOf t1 COrd && isChildOf t2 COrd && t1 == t2 = step (Value $ VBool $ e1 > e2, env, store, nextAddr, kon)
+    | isChildOf [] t1 ([], COrd) && isChildOf [] t2 ([], COrd) && t1 == t2 = step (Value $ VBool $ e1 > e2, env, store, nextAddr, kon)
     | otherwise = error $ "Type error \n" ++ (show $ Value e1)++"\n"++(show GreaterThan)++"\n"++(show $ Value e2) ++"\nInteger"
     where
         t1 = getType store e1
         t2 = getType store e2
 
 step (Value e2, env', store, nextAddr, (BinOpH (BinCompOp Equality (Value e1) env)):kon)
-    | isChildOf t1 CEq && isChildOf t2 CEq && t1 == t2 = step (Value $ VBool $ e1 == e2, env, store, nextAddr, kon)
+    | isChildOf [] t1 ([], CEq) && isChildOf [] t2 ([], CEq) && t1 == t2 = step (Value $ VBool $ e1 == e2, env, store, nextAddr, kon)
     | otherwise = error $ "Type error \n" ++ (show $ Value e1)++"\n"++(show Equality)++"\n"++(show $ Value e2)
     where
         t1 = getType store e1
@@ -697,35 +697,63 @@ compareTypes tc (TList e1) (TList TEmpty) = True
 compareTypes tc (TList e1) (TList e2) = compareTypes tc e1 e2
 compareTypes tc (TList _) (TParamList) = True
 compareTypes tc (TRef e1) (TRef e2) = compareTypes tc e1 e2
+compareTypes tc (TGeneric s) g@(TGeneric s')
+    | s == s' = True
+    | c == Nothing = True
+    | otherwise = isChildOf tc g (s, fromJust c)
+    where
+        c = lookup s tc
+
+compareTypes tc (TGeneric s) TParamList = True
+
 compareTypes tc (TGeneric s) e2
-    | c == Nothing = True -- Generic can be anything
-    | otherwise = isChildOf e2 (fromJust c)
-    where c = lookup s tc
+    | c == Nothing = False
+    | otherwise = isChildOf tc e2 (s, fromJust c)
+    where 
+        c = lookup s tc
+
 compareTypes tc (TIterable g) (TStream) = compareTypes tc g TInt
 compareTypes tc (TIterable g) (TList e2) = compareTypes tc g e2
 compareTypes tc (TIterable g) (TParamList) = True
 compareTypes tc e1 e2 = e1 == e2
 
 -- Check if a type is a child of a type class.
-isChildOf :: Type -> TypeClass -> Bool
+isChildOf :: [(String, TypeClass)] -> Type -> (String, TypeClass) -> Bool
 
 -- Eq class.
-isChildOf TInt CEq = True
-isChildOf TBool CEq = True
-isChildOf TEmpty CEq = True
-isChildOf TNone CEq = True
-isChildOf (TList e1) CEq = isChildOf e1 CEq
-isChildOf _ CEq = False
+isChildOf tc TInt (s, CEq) = True
+isChildOf tc TBool (s, CEq) = True
+isChildOf tc TEmpty (s, CEq) = True
+isChildOf tc TNone (s, CEq) = True
+isChildOf tc (TList e1) (s, CEq) = isChildOf tc e1 (s, CEq)
+isChildOf tc (TGeneric a) (s, CEq)
+    | a == s = False -- a == s, so a can't be a child of s
+    | t == Nothing = False
+    | fromJust t == CEq = True
+    | otherwise = False
+    where t = lookup a tc
+isChildOf _ _ (_, CEq) = False
 
 -- Itr class.
-isChildOf (TList _) CItr = True
-isChildOf TStream CItr = True
-isChildOf _ CItr = False
+isChildOf tc (TList _) (s, CItr) = True
+isChildOf tc TStream (s, CItr) = True
+isChildOf tc (TGeneric a) (s, CItr)
+    | a == s = False
+    | t == Nothing = False
+    | fromJust t == CItr = True
+    | otherwise = False
+    where t = lookup a tc
+isChildOf _ _ (s, CItr) = False
 
 -- Ord class.
-isChildOf TInt COrd = True
-isChildOf (TList e1) COrd = isChildOf e1 COrd
-isChildOf _ COrd = False
+isChildOf tc TInt (s, COrd) = True
+isChildOf tc (TGeneric a) (s, COrd)
+    | a == s = False
+    | t == Nothing = False
+    | fromJust t == COrd = True
+    | otherwise = False
+    where t = lookup a tc
+isChildOf tc _ (s, COrd) = False
 
 -- Build a function type.
 evaluateFuncType :: Expr -> Type 

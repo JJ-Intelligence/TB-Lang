@@ -69,7 +69,7 @@ instance Show Type where
     show TEmpty = ""
     show TNone = "null"
     show (TIterable t) = "TIterable " ++ (show t)
-    show (TList x) = "["++(show x)++"]" 
+    show (TList x) = "TList ["++(show x)++"]" 
     show TStream = "Stream"
     show (TRef x) = "Ref " ++ (show x)
     show (TGeneric s) = s
