@@ -293,22 +293,55 @@ process (LocalAssign (DefVar s (Func ps' e1))) (global, local, ft) = do
             exitFailure
 
         Just (TFunc ps out cs) -> do
-            local <- putFuncParamsInStore cs ps ps' local
-            (t, (global', local', _)) <- process e1 (global, local, [])
-
-            if length t /= 1 then do
-                printStdErr ("ERROR: ambiguous types for: " ++ (show (Return e1)))
+            if (hasDuplicateVarNames ps') then do
+                printStdErr ("ERROR: Duplicate variable names in function definition: " ++ (show (DefVar s (Func ps' e1))))
                 exitFailure
             else
                 return ()
 
-            if (head t) /= out then do
-                printStdErr ("ERROR: function definition for \'" ++ s ++ "\' doesn't match the functions return type.\nThe function return type is: " ++ (show out) ++ "\nBut the function definition return type is: " ++ (show $ head t))
-                exitFailure
-            else
-                return ()
+            case (putFuncParamsInStore cs ps ps' (Map.empty)) of
+                (Left es) -> do
+                    printStdErr ("ERROR: function definition parameters for \'" ++ s ++ "\' doesn't match the functions input type.\n"
+                        ++ (foldr (\(t,e) acc -> ("Type \'" ++ (show t) ++ "\' does not match the type of expression \'" ++ (show e) ++ "\'\n")++acc) "" es))
+                    exitFailure
 
-            return ([(TFunc ps out cs)], global', local, ft)
+                (Right funcLocal) -> do
+                    let funcGlobal = if ft == [] then local else global
+
+                    (t, (funcGlobal', funcLocal', _)) <- process e1 (funcGlobal, funcLocal, [])
+
+                if length t /= 1 then do
+                    printStdErr ("ERROR: ambiguous return types for function \'" ++ (show s) ++ "\'.\n"
+                        ++ "The return type should be: " ++ (show out) ++ "\n"
+                        ++ "But the declared return types are: " ++ (show $ head t) ++ (foldr (\t' acc -> ", "(show t') ++ acc) "" (tail t)))
+                    exitFailure
+                else
+                    return ()
+
+                if (head t) /= out then do
+                    printStdErr ("ERROR: function definition for \'" ++ s ++ "\' doesn't match the functions return type.\n"
+                        ++ "The function return type is: " ++ (show out) ++ "\n" 
+                        ++ "But the declared return type is: " ++ (show $ head t))
+                    exitFailure
+                else
+                    return ()
+
+            return $ if ft == [] 
+                then ([(TFunc ps out cs)], (global, funcGlobal', ft)) 
+                else ([(TFunc ps out cs)], (funcGlobal', local, ft))
+
+            where 
+                hasDuplicateVarNames FuncParamEnd ls = helper ls 
+                    where
+                        helper [] = False
+                        helper (s:ls) = s `elem` ls || helper ls
+
+                hasDuplicateVarNames (FuncParam e1 e2) ls = checkDuplicateVarNames e2 $ helper e1 ls
+                    where 
+                        helper (Var s) ls = s:ls
+                        helper (PointerExpr e1) ls = helper e1 ls
+                        helper (Cons e1 e2) ls = helper e2 $ helper e1
+                        helper _ ls = ls
 
         _ -> do
             printStdErr ("ERROR: \'" ++ s ++ "\' is not a function.")
@@ -323,16 +356,59 @@ process e s = return ([TNone], s)
 --processFuncBlock :: Expr -> ProcessState -> [Type] -> IO ([Type], ProcessState, [Type])
 
 
-putFuncParamsInStore :: [(String, TypeClass)] -> [Type] -> Parameters -> TStore -> IO (TStore)
-putFuncParamsInStore cs ts ps local
+-- Returns either an error - a list of correct types to their incorrect parameter expressions - or returns an updated TStore
+putFuncParamsInStore :: [(String, TypeClass)] -> [Type] -> Parameters -> TStore -> [(Type, Expr)] -> Either [(Type, Expr)] TStore
+putFuncParamsInStore tc ts FuncParamEnd local es
+    | es == [] = return $ Right local
+    | otherwise = return $ Left es
+putFuncParamsInStore tc (t:ts) (FuncParam e1 e2) local es
+    | ms == Nothing = putFuncParamsInStore tc ts e2 local ((t,e1):es)
+    | otherwise = putFuncParamsInStore tc ts e2 (foldr (\(s,vt) acc -> Map.insert s vt acc) local ms) es
     where
+        ms = matchToType tc t e1 []
 
-        --Input: [[Int]] (Cons e1 e2) -> [(s, [Int]), ...]
-        matchToType :: Type -> Expr -> [(String, Type)]
-        matchToType ts (Cons e1 (Cons e2 e3))
-        
+        --Input: [[Int]] (Cons e1 e2) [] -> [(s, [Int]), ...]
+        matchToType :: [(String, TypeClass)] -> Type -> Expr -> [(String, Type)] -> Maybe [(String, Type)]
+        matchToType tc t (Cons e1 e2) ls
+            | isItrOrList t = if ls' == Nothing then Nothing else matchToType tc t e2 ls'
+            | otherwise = Nothing
+            where
+                ls' = matchToType tc a e1 ls in
 
+                isItrOrList (TIterable _) = True
+                isItrOrList (TList _) = True
+                isItrOrList _ = False
 
+        matchToType tc (TRef rt) (PointerExpr e1) ls
+            | ls' == Nothing = Nothing
+            | otherwise = Just $ foldr (\(s,t) acc -> (s,TRef t):acc) ls ls'
+            where ls' = matchToType tc rt e1 []
+
+        matchToType tc t (Var s) ls = (s, t):ls
+
+        matchToType tc t e ls
+            | t' == Nothing || not (compareTypes tc t (fromJust t')) = Nothing
+            | otherwise = Just ls
+            where t' = getLitType e
+
+        matchToType tc TInt (Literal (EInt _)) ls = Just ls
+        matchToType tc TBool (Literal (EBool _)) ls = Just ls
+        matchToType tc (TList TEmpty) (Literal Empty) ls = Just ls
+        matchToType tc TNone (Literal ENone) ls = Just ls
+        matchToType _ _ _ _ = Nothing
+
+        getLitType :: Expr -> Maybe Type
+        getLitType (Literal (EInt _)) = Just TInt
+        getLitType (Literal (EBool _)) = Just TBool
+        getLitType (Literal Empty) = Just $ TList TEmpty
+        getLitType (Literal ENone) = Just TNone
+        getLitType _ = Nothing
+
+        -- Eq, Itr, Ord
+
+-- TODO:
+-- * Change 'ft' in process state to be ([Type], [(String, TypeClass)]) - i.e. also pass around the type constraints.
+-- * Make use of type constraints in functions if returned type is a generic.
 
 
 unionStates :: (TStore, TStore) -> (TStore, TStore) -> (TStore, TStore)
@@ -359,8 +435,3 @@ printStdErr :: String -> IO ()
 printStdErr s = do
     hPutStrLn stderr s
     return ()
-
-
-
-
---process (Seq e1 e2, t, global, local) =
