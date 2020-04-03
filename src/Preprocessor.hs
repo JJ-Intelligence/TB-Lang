@@ -108,9 +108,10 @@ process (LocalAssign (DefVar s (Func ps' e1))) (global, local, (ft, tc)) = do
                 return ()
 
             case (putFuncParamsInStore cs ps ps' (Map.empty) []) of
-                (Left es) -> do
+                (Left (es, ts)) -> do
                     printStdErr ("ERROR: function definition parameters for \'" ++ s ++ "\' doesn't match the functions input type.\n"
-                        ++ (foldr (\(t,e) acc -> ("Type \'" ++ (show t) ++ "\' does not match the type of expression \'" ++ (show e) ++ "\'\n")++acc) "" es))
+                        ++ (foldr (\(t,e) acc -> "Type \'" ++ (show t) ++ "\' does not match the type of expression \'" ++ (show e) ++ "\'\n"++acc) "" es)
+                        ++ "\n" ++ (foldr (\ty acc -> "Type \'" ++ (show t) ++ "\' is not matched in the function definition\n"++acc) "" ts))
                     exitFailure
 
                 (Right funcLocal) -> do
@@ -167,10 +168,47 @@ process (Var s) state@(global, local, ft) = do
     let t = (lookupT s (global, local))
     if t == Nothing
         then do
-            printStdErr ("ERROR: variable referenced before assignment: "++(show s))
+            printStdErr ("ERROR: variable referenced before assignment: " ++ (show s))
             exitFailure
         else return ()
     return ((fromJust t), state)
+
+
+process (FuncCall s ps) (global, local, (ft, cs)) = do
+    case lookupT s (global, local) of
+        Nothing -> do
+            printStdErr ("ERROR: function \'"++s++"\' has not been declared")
+            exitFailure
+
+        Just (TFunc ps' out ts) -> do
+            (ms, (global', local')) <- matchParamsToType ts (global, local, cs) ps' ps []
+
+            if ms == Nothing then do
+                printStdErr ("ERROR: function call parameter type mis-match " ++ (show ms))
+                exitFailure
+            else
+                return ()
+
+            return ([out], global', local', (ft, cs))
+
+        Just _ -> do
+            printStdErr ("ERROR: \'" ++ (show s) ++ "\' is not a function.")
+            exitFailure
+
+
+    where
+        matchParamsToType :: TypeConstraints -> (TStore, TStore, TypeConstraints) -> [Type] -> Parameters -> [(Type, (Expr, Type))] -> IO (Maybe [(Type, (Expr, Type))], (TStore, TStore))
+        matchParamsToType tc (global, local, cs) ts (FuncParamEnd) es
+            | ts /= [] || es /= [] = return (Just $ es, (global, local))
+            | otherwise = return (Nothing, (global, local))
+        matchParamsToType tc (global, local, cs) (t:ts) (FuncParam e1 e2) es = do
+            (t', (global', local', ft')) <- process e1 (global, local, ([], cs))
+
+            if (compareTypes tc t t')
+                then matchParamsToType (global', local', cs) ts e2 es
+                else matchParamsToType (global, local, cs) ts e2 ((t, (e1, t')):es)
+
+
 
 
 process (Op (Cons e1 e2)) (global, local, ft) = do
@@ -357,30 +395,39 @@ process (If c e1 e2) (global, local, ft) = do
             return ([TNone], (global1, local1, ft1))
 
 process (While c e1) (global, local, ft) = do
-    (tc, (global1, local1, ft1)) <- process c (global, local, ft)
+    (ts, (global1, local1, ft1)) <- process c (global, local, ft)
 
-    if length tc /= 1 || (head tc) /= TBool then do
+    if length ts /= 1 || (head ts) /= TBool then do
         printStdErr ("ERROR: expected boolean in while loop condition: " ++ (show (While c e1)))
         exitFailure
     else return ()
 
     (t1, (global2, local2, ft2)) <- process e1 (global1, local1, ft1)
-    let (global3, local3) = unionStates (global1, local1) (global2, local2)
-    return ([TNone], (global3, local3, ft2))
+    -- let (global3, local3) = unionStates (global1, local1) (global2, local2) -- Don't think we need this union?
+    return ([TNone], (global2, local2, ft2))
+
+process (For i c n e) (global, local, ft) = do
+    (ts1, (global1, local1, ft1)) <- process i (global, local, ft)
+    (ts2, (global2, local2, ft2)) <- process c (global1, local1, ft1)
+
+    if length ts2 /= 1 || (head ts2) /= TBool then do
+        printStdErr ("ERROR: expected boolean in for loop condition: " ++ (show c))
+        exitFailure
+    else 
+        return ()
+
+    (ts3, (global3, local3, ft3)) <- process n (global2, local2, ft2)
+    (ts4, (global4, local4, ft4)) <- process n (global3, local3, ft3)
+    return ([TNone], (global4, local4, ft2))
 
 process e s = return ([TNone], s)
 
---process a b = return ([VNone], b)
-
--- [Type] is the list of return types of this func block - should return a singleton at the end, else there's a type conflict.
---processFuncBlock :: Expr -> ProcessState -> [Type] -> IO ([Type], ProcessState, [Type])
-
 
 -- Returns either an error - a list of correct types to their incorrect parameter expressions - or returns an updated TStore
-putFuncParamsInStore :: TypeConstraints -> [Type] -> Parameters -> TStore -> [(Type, Expr)] -> Either [(Type, Expr)] TStore
+putFuncParamsInStore :: TypeConstraints -> [Type] -> Parameters -> TStore -> [(Type, Expr)] -> Either ([(Type, Expr)], [Type]) TStore
 putFuncParamsInStore tc ts FuncParamEnd local es
-    | es == [] = Right local
-    | otherwise = Left es
+    | ts /= [] || es /= [] = Left (es, ts)
+    | otherwise = Right local
 putFuncParamsInStore tc (t:ts) (FuncParam e1 e2) local es
     | ms == Nothing = putFuncParamsInStore tc ts e2 local ((t,e1):es)
     | otherwise = putFuncParamsInStore tc ts e2 (foldr (\(s,vt) acc -> Map.insert s [vt] acc) local (fromJust ms)) es
