@@ -7,12 +7,7 @@ func f (a:as, b:bs) = {
 
 out(f([1], [1]) > 2);
 
-x = {
-    out(1);
-    return (True);
-};
-
-out(x + 2);
+out(9223372036854775806 + 1);
 
 -- [TList a, TList b] ~ [(b, CEq)]
 -- [[a,as], [b,bs]]
@@ -25,5 +20,6 @@ out(x + 2);
 -- } catch (b) ~ (Exception b)
 
 
--- IndexOutOfBound
--- StreamOutOfInput
+EmptyListException
+IndexOutOfBoundException
+StreamOutOfInputException
