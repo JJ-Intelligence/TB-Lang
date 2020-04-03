@@ -2,7 +2,7 @@ module Preprocessor where
 import Expression
 import qualified Data.Map.Strict as Map
 import Data.Maybe
--- import Data.List
+import qualified Data.Set as Set
 import Debug.Trace
 import System.IO (hPutStrLn, stderr)
 import System.Exit (exitFailure)
@@ -56,6 +56,7 @@ process (Literal (EBool b)) (global, local, ft) = return ([TBool], (global, loca
 process (Literal Empty) (global, local, ft) = return ([TList TEmpty], (global, local, ft))
 process (Literal ENone) (global, local, ft) = return ([TNone], (global, local, ft))
 
+
 process (Return e1) (global, local, (ft, tc)) = do
     (t, (global', local', _)) <- process e1 (global, local, (ft,tc))
 
@@ -66,6 +67,7 @@ process (Return e1) (global, local, (ft, tc)) = do
         return ()
 
     return ([TNone], (global', local', ((if (head t `elem` ft) then ft else (head t):ft), tc)))
+
 
 process (FuncBlock e1) (global, local, (ft, tc)) = do 
     (t, (global', local', (ft', tc'))) <- process e1 (global, local, ([TNone], tc))
@@ -81,6 +83,7 @@ process (FuncBlock e1) (global, local, (ft, tc)) = do
 
     return (ft', (global', local', (ft,tc)))
 
+
 -- Declaring a function type.
 process (LocalAssign (DefVar s (FuncType ps out cs))) (global, local, ft) = do
     case (Map.lookup s local) of
@@ -92,6 +95,7 @@ process (LocalAssign (DefVar s (FuncType ps out cs))) (global, local, ft) = do
         _ -> do
             let ts = evaluateFuncType (FuncType ps out cs)
             return ([ts], (global, Map.insert s [ts] local, ft))
+
 
 -- Declaring a function definition.
 process (LocalAssign (DefVar s (Func ps' e1))) (global, local, (ft, tc)) = do
@@ -156,6 +160,7 @@ process (LocalAssign (DefVar s (Func ps' e1))) (global, local, (ft, tc)) = do
                 helper (Op (Cons e1 e2)) ls = helper e2 $ helper e1 ls
                 helper _ ls = ls
 
+
 process (LocalAssign (DefVar s e1)) (global, local, ft) = do
     (t', (global', local', ft')) <- process e1 (global, local, ft)
     let lv = (lookupT s (global, local))
@@ -163,6 +168,7 @@ process (LocalAssign (DefVar s e1)) (global, local, ft) = do
         then printStdErr ("WARNING: ambiguous types for: " ++ (show s) ++ " in " ++ (show (LocalAssign (DefVar s e1))))
         else return ()
     return (t', (global', Map.insert s t' local', ft'))
+
 
 process (Var s) state@(global, local, ft) = do
     let t = (lookupT s (global, local))
@@ -172,14 +178,6 @@ process (Var s) state@(global, local, ft) = do
             exitFailure
         else return ()
     return ((fromJust t), state)
-
-
--- TODO:
--- * Check FuncCall works
--- * Handle global assign
--- * Handle AddressExpr
--- * Handle PointerExpr
-
 
 
 process (FuncCall s ps) (global, local, (ft, cs)) = do
@@ -198,7 +196,45 @@ process (FuncCall s ps) (global, local, (ft, cs)) = do
             else
                 return ()
 
-            return ([out], (global', local', (ft, cs)))
+            let g = containsGeneric out
+            case g == TConflict of
+                True -> return ([out], (global', local', (ft, cs)))
+                False -> do
+                    let (TGeneric g') = g 
+                    let xs = foldr (\(t,n) acc -> if isGenericInFuncParam g' t then (t,n):acc else acc) [] (zip ps' [0..]) -- xs = [(Type, Int)] (function parameter types)
+
+                    case length xs < 1 of
+                        True -> do
+                            printStdErr ("WARNNG: return type generic is not in function parameters, so cannot be inferred.")
+                            return ([out], (global', local', (ft, cs)))
+
+                        False -> do
+                            ys <- foldr (\e acc -> do
+                                            (t', (global', local', ft')) <- process e (global, local, ([], cs))
+                                            acc' <- acc
+                                            return (head t':acc')) (return []) (foldOverParams (map snd xs) 0 ps) -- ys = IO [(Type, Int)] (function argument types)
+
+                            zs <- getGenericTypes (map fst xs) ys
+                            
+                            case (length (Set.fromList zs)) == 1 of
+                                False -> do
+                                    let ts = Set.toList (Set.fromList zs)
+                                    printStdErr ("ERROR: In function call parameters: \'"++(show $ FuncCall s ps)++"\'."
+                                        ++"\nMultiple different types are provided for generic \'" ++ g' ++ "\': " ++ (show $ head ts)++ (foldr (\t acc -> ", " ++ (show t) ++ acc) "" (tail ts)))
+                                    exitFailure
+
+                                True -> do
+                                    let rt = subTypeIntoGeneric g' (head zs) out
+
+                                    if rt == TConflict then do
+                                        printStdErr ("ERROR: Unable to infer return type form generic and parameter input.")
+                                        exitFailure
+                                    else
+                                        return ()
+
+                                    putStrLn $ "Function call return type: " ++ (show rt)
+
+                                    return ([rt], (global', local', (ft, cs)))
 
         Just _ -> do
             printStdErr ("ERROR: \'" ++ (show s) ++ "\' is not a function.")
@@ -222,7 +258,60 @@ process (FuncCall s ps) (global, local, (ft, cs)) = do
                 then matchParamsToType tc (global', local', cs) ts e2 es
                 else matchParamsToType tc (global, local, cs) ts e2 ((t, (e1, (head t'))):es)
 
+        containsGeneric :: Type -> Type -- Takes in return type, and returns TConflict if no generics, or TGeneric a if generic
+        containsGeneric (TList t) = containsGeneric t
+        containsGeneric (TRef t) = containsGeneric t
+        containsGeneric (TIterable t) = containsGeneric t
+        containsGeneric g@(TGeneric s) = g
+        containsGeneric _ = TConflict
 
+        isGenericInFuncParam :: String -> Type -> Bool -- Takes in generic and a parameter type, returns TConflict if generic doesn't match, else returns the param type.
+        isGenericInFuncParam s (TList t) = isGenericInFuncParam s t
+        isGenericInFuncParam s (TRef t) = isGenericInFuncParam s t
+        isGenericInFuncParam s (TIterable t) = isGenericInFuncParam s t
+        isGenericInFuncParam s (TGeneric s') = s == s'
+        isGenericInFuncParam _ _ = False
+
+        foldOverParams :: [Int] -> Int -> Parameters -> [Expr]
+        foldOverParams [] i ps = []
+        foldOverParams (n:ns) i (FuncParam e1 e2)
+            | i == n = e1 : foldOverParams ns (i+1) e2
+            | otherwise = foldOverParams (n:ns) (i+1) e2
+
+        getGenericTypes :: [Type] -> [Type] -> IO [Type]
+        getGenericTypes [] _ = return []
+        getGenericTypes (t:tp) (t':ta) = do
+            case getGenType t t' of
+                TConflict -> do
+                    printStdErr ("ERROR: Type param doesn't match type of argument.")
+                    exitFailure
+                t -> do
+                    ts <- getGenericTypes tp ta
+                    return (t:ts)
+            where
+                getGenType :: Type -> Type -> Type
+                getGenType (TList t) (TList t') = getGenType t t'
+                getGenType (TRef t) (TRef t') = getGenType t t'
+                getGenType (TIterable t) (TList t') = getGenType t t'
+                getGenType (TIterable (TGeneric a)) (TStream) = TInt
+                getGenType (TGeneric a) t = t
+                getGenType _ _ = TConflict
+
+        subTypeIntoGeneric :: String -> Type -> Type -> Type
+        subTypeIntoGeneric g t (TList t')
+            | rt == TConflict = TConflict
+            | otherwise = TList rt
+            where rt = subTypeIntoGeneric g t t'
+        subTypeIntoGeneric g t (TRef t')
+            | rt == TConflict = TConflict
+            | otherwise = TRef rt
+            where rt = subTypeIntoGeneric g t t'
+        subTypeIntoGeneric g t (TIterable t')
+            | rt == TConflict = TConflict
+            | otherwise = TIterable rt
+            where rt = subTypeIntoGeneric g t t'
+        subTypeIntoGeneric g t (TGeneric a) = t
+        subTypeIntoGeneric _ _ _ = TConflict
 
 
 process (Op (Cons e1 e2)) (global, local, ft) = do
@@ -359,7 +448,7 @@ process (Op (CompOp op e1 e2)) (global, local, (ft, tc)) = do
         True -> do -- &&, || operations
             if (head t1) /= TBool || (head t2) /= TBool
                 then do
-                    printStdErr ("ERROR: type invalid for op \'&&\' in \'" ++ (show (Op (CompOp op e1 e2))) ++ "\'"
+                    printStdErr ("ERROR: type invalid for op \'"++(show op)++"\' in \'" ++ (show (Op (CompOp op e1 e2))) ++ "\'"
                         ++ "\nType of e1 is: " ++ (show $ head t1)
                         ++ "\nType of e2 is: " ++ (show $ head t2)
                         ++ "\nHowever, both should have type Boolean.")
@@ -369,19 +458,27 @@ process (Op (CompOp op e1 e2)) (global, local, (ft, tc)) = do
         False -> do
             case op == Equality || op == NotEquals of -- TODO add NOT equals and NOT
                 True -> do -- == operation
-                    if isChildOf tc (head t1) ([], CEq) && isChildOf tc (head t2) ([], CEq) && (compareTypes tc (head t1) (head t2))
+                    if isChildOf tc (head t1) ([], CEq) && isChildOf tc (head t2) ([], CEq) && compareTypes tc (head t1) (head t2)
                         then return ()
                         else do
-                            printStdErr ("ERROR: type invalid for op: "++(show (Op (CompOp op e1 e2))))
+                            printStdErr ("ERROR: type invalid for op \'"++(show op)++"\' in \'" ++ (show (Op (CompOp op e1 e2))) ++ "\'"
+                                ++ "\nType of e1 is: " ++ (show $ head t1)
+                                ++ "\nType of e2 is: " ++ (show $ head t2)
+                                ++ "\nHowever, both should have type Boolean.")
                             exitFailure
 
                 False -> do -- <, > operations
-                    if isChildOf tc (head t1) ([], COrd) && isChildOf tc (head t2) ([], COrd) && (compareTypes tc (head t1) (head t2))
+                    if isChildOf tc (head t1) ([], COrd) && isChildOf tc (head t2) ([], COrd) && compareTypes tc (head t1) (head t2)
                         then return ()
                         else do
-                            printStdErr ("ERROR: type invalid for op: "++(show (Op (CompOp op e1 e2))))
+                            printStdErr ("ERROR: type invalid for op \'"++(show op)++"\' in \'" ++ (show (Op (CompOp op e1 e2))) ++ "\'"
+                                ++ "\nType of e1 is: " ++ (show $ head t1)
+                                ++ "\nType of e2 is: " ++ (show $ head t2)
+                                ++ "\nHowever, both should have type Boolean."
+                                ++ "\nErrors: " ++ (show $ isChildOf tc (head t1) ([], COrd)) ++ " | " ++ (show $ isChildOf tc (head t2) ([], COrd)) ++ " | " ++ (show $ compareTypes tc (head t1) (head t2)))
                             exitFailure
     return ([TBool], (global2, local2, ft2))
+
 
 process (If c e1 e2) (global, local, ft) = do
     (tc, (global', local', ft')) <- process c (global, local, ft)
@@ -479,9 +576,6 @@ putFuncParamsInStore tc (t:ts) (FuncParam e1 e2) local es
         getLitType (Literal Empty) = Just $ TList TEmpty
         getLitType (Literal ENone) = Just TNone
         getLitType _ = Nothing
-
--- TODO:
--- * Make use of type constraints in functions if returned type is a generic.
 
 
 unionStates :: (TStore, TStore) -> (TStore, TStore) -> (TStore, TStore)

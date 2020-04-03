@@ -60,7 +60,7 @@ data Type = TFunc [Type] Type [(String, TypeClass)]
           | TGeneric String
           | TConflict
           | TParamList
-          deriving (Eq)
+          deriving (Eq, Ord)
 
 instance Show Type where 
     show (TFunc ps out cs) = "TFunc " ++ (show ps) ++ " " ++ (show out) ++ " " ++ (show cs)
@@ -203,7 +203,7 @@ data Assignment = DefVar String Expr
 data TypeClass = CEq
                | CItr
                | COrd
-               deriving (Eq, Show)
+               deriving (Eq, Ord, Show)
 
 data Expr = If Expr Expr (Maybe ExprElif)
           | While Expr Expr
