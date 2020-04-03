@@ -156,6 +156,7 @@ instance Show BinOp where
 
 -- Comparison operations.
 data ExprComp = Equality
+              | NotEquals
               | And 
               | Or
               | LessThan
@@ -164,6 +165,7 @@ data ExprComp = Equality
 
 instance Show ExprComp where
   show Equality = "=="
+  show NotEquals = "!="
   show And = "&&"
   show Or = "||"
   show LessThan = "<"

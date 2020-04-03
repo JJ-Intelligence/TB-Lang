@@ -427,6 +427,13 @@ step (Value e2, env', store, nextAddr, (BinOpH (BinCompOp Equality (Value e1) en
         t1 = getType store e1
         t2 = getType store e2
 
+step (Value e2, env', store, nextAddr, (BinOpH (BinCompOp NotEquals (Value e1) env)):kon)
+    | isChildOf [] t1 ([], CEq) && isChildOf [] t2 ([], CEq) && t1 == t2 = step (Value $ VBool $ e1 /= e2, env, store, nextAddr, kon)
+    | otherwise = error $ "Type error \n" ++ (show $ Value e1)++"\n"++(show NotEquals)++"\n"++(show $ Value e2)
+    where
+        t1 = getType store e1
+        t2 = getType store e2
+
 
 -- Cons operation.
 step (Op (Cons e1 e2), env, store, nextAddr, kon) = step (e1, env, store, nextAddr, (HBinOp $ BinConsOp e2 env):kon)
@@ -505,7 +512,7 @@ handleFuncArgs args env store nextAddr s = do
     let fv@(VFunc (TFunc ts _ cs) _) = (lookupVar s env store)
 
     case validType store cs ts args of
-        False -> error "Type error, invalid argument for function."
+        False -> error $ "Type error, invalid argument for function:\n" ++ (show cs) ++ "\n" ++ (show ts) ++ "\n" ++ (show args)
 
         True -> do
             (e1, xs, store') <- matchArgsToFunc store args fv
@@ -707,10 +714,16 @@ compareTypes tc (TGeneric s) g@(TGeneric s')
 compareTypes tc (TGeneric s) TParamList = True
 
 compareTypes tc (TGeneric s) e2
+    | c == Nothing = if isPrimitive e2 then True else False
     | c == Nothing = False
     | otherwise = isChildOf tc e2 (s, fromJust c)
     where 
         c = lookup s tc
+
+        isPrimitive TInt = True
+        isPrimitive TBool = True
+        isPrimitive TNone = True
+        isPrimitive _ = False
 
 compareTypes tc (TIterable g) (TStream) = compareTypes tc g TInt
 compareTypes tc (TIterable g) (TList e2) = compareTypes tc g e2

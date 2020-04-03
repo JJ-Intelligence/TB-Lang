@@ -1,9 +1,11 @@
 
-type f ([a], [b]) -> b ~ (Eq b);
+type f ([a], [b]) -> b ~ (Ord b);
 func f (a:as, b:bs) = {
     out(1);
-    return([b]);
+    return(b);
 };
+
+out(f([1,2], [True]));
 
 
 -- [TList a, TList b] ~ [(b, CEq)]

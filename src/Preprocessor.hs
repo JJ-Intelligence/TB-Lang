@@ -111,7 +111,7 @@ process (LocalAssign (DefVar s (Func ps' e1))) (global, local, (ft, tc)) = do
                 (Left (es, ts)) -> do
                     printStdErr ("ERROR: function definition parameters for \'" ++ s ++ "\' doesn't match the functions input type.\n"
                         ++ (foldr (\(t,e) acc -> "Type \'" ++ (show t) ++ "\' does not match the type of expression \'" ++ (show e) ++ "\'\n"++acc) "" es)
-                        ++ "\n" ++ (foldr (\ty acc -> "Type \'" ++ (show t) ++ "\' is not matched in the function definition\n"++acc) "" ts))
+                        ++ "\n" ++ (foldr (\t acc -> "Type \'" ++ (show t) ++ "\' is not matched in the function definition\n"++acc) "" ts))
                     exitFailure
 
                 (Right funcLocal) -> do
@@ -174,27 +174,35 @@ process (Var s) state@(global, local, ft) = do
     return ((fromJust t), state)
 
 
+-- TODO:
+-- * Check FuncCall works
+-- * Handle global assign
+-- * Handle AddressExpr
+-- * Handle PointerExpr
+
+
+
 process (FuncCall s ps) (global, local, (ft, cs)) = do
     case lookupT s (global, local) of
         Nothing -> do
             printStdErr ("ERROR: function \'"++s++"\' has not been declared")
             exitFailure
 
-        Just (TFunc ps' out ts) -> do
+        Just ([TFunc ps' out ts]) -> do
             (ms, (global', local')) <- matchParamsToType ts (global, local, cs) ps' ps []
 
-            if ms == Nothing then do
-                printStdErr ("ERROR: function call parameter type mis-match " ++ (show ms))
+            if ms /= Nothing then do
+                printStdErr ("ERROR: function call parameter type mis-match.\n" 
+                    ++ (foldr (\(t, (e, t')) acc -> "Type " ++ (show t) ++ " doesn't match the type of parameter \'"++(show e)++"\' ("++(show t')++")"++acc) "" (fromJust ms)))
                 exitFailure
             else
                 return ()
 
-            return ([out], global', local', (ft, cs))
+            return ([out], (global', local', (ft, cs)))
 
         Just _ -> do
             printStdErr ("ERROR: \'" ++ (show s) ++ "\' is not a function.")
             exitFailure
-
 
     where
         matchParamsToType :: TypeConstraints -> (TStore, TStore, TypeConstraints) -> [Type] -> Parameters -> [(Type, (Expr, Type))] -> IO (Maybe [(Type, (Expr, Type))], (TStore, TStore))
@@ -204,9 +212,15 @@ process (FuncCall s ps) (global, local, (ft, cs)) = do
         matchParamsToType tc (global, local, cs) (t:ts) (FuncParam e1 e2) es = do
             (t', (global', local', ft')) <- process e1 (global, local, ([], cs))
 
-            if (compareTypes tc t t')
-                then matchParamsToType (global', local', cs) ts e2 es
-                else matchParamsToType (global, local, cs) ts e2 ((t, (e1, t')):es)
+            if length t' /= 1 then do
+                printStdErr ("ERROR: parameter has multiple types in: \'" ++ (show e1) ++ "\'\nDiscovered types include: " ++ (show t'))
+                exitFailure
+            else
+                return ()
+
+            if (compareTypes tc t (head t'))
+                then matchParamsToType tc (global', local', cs) ts e2 es
+                else matchParamsToType tc (global, local, cs) ts e2 ((t, (e1, (head t'))):es)
 
 
 
@@ -353,7 +367,7 @@ process (Op (CompOp op e1 e2)) (global, local, (ft, tc)) = do
                 else return ()
 
         False -> do
-            case op==Equality of -- TODO add NOT equals and NOT
+            case op == Equality || op == NotEquals of -- TODO add NOT equals and NOT
                 True -> do -- == operation
                     if isChildOf tc (head t1) ([], CEq) && isChildOf tc (head t2) ([], CEq) && (compareTypes tc (head t1) (head t2))
                         then return ()
