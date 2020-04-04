@@ -59,9 +59,12 @@ insertReserved env store = helper ls env (MapL.insert storedGlobalEnv (GlobalEnv
                 ("isEmpty", (VFunc 
                     (TFunc [TRef $ TIterable $ TGeneric "a"] (TBool) []) 
                     [([VVar "xs"], BuiltInFunc "isEmpty" [Var "xs"])])),
-                ("hasElems", (VFunc 
-                    (TFunc [TInt, TRef $ TIterable $ TGeneric "a"] (TBool) []) 
+                ("hasElems", (VFunc
+                    (TFunc [TInt, TRef $ TIterable $ TGeneric "a"] (TBool) [])
                     [([VVar "n", VVar "xs"], BuiltInFunc "hasElems" [Var "n", Var "xs"])])),
+                ("throw", (VFunc
+                    (TFunc [TException] (TNone) [])
+                    [([VVar "e"], BuiltInFunc "throw" [Var "e"])])),
                 ("EmptyListException", (VException EmptyListException)),
                 ("IndexOutOfBoundException", (VException IndexOutOfBoundException)),
                 ("StreamOutOfInputException", (VException StreamOutOfInputException))
@@ -330,6 +333,10 @@ step (BuiltInFunc "hasElems" [Var n, Var p], env, store, nextAddr, kon) = case v
         (VRef r) = lookupVar p env store
         v = MapL.lookup r store
 
+step (BuiltInFunc "throw" [Var e], env, store, nextAddr, kon) =
+
+    where
+        v = (lookupVar e env store)
 
 -- IO Operations:
 step (BuiltInFunc "out" [Var a], env, store, nextAddr, kon) = do
