@@ -110,6 +110,7 @@ data Exception = EmptyListException
                | IndexOutOfBoundException
                | StreamOutOfInputException
                | InvalidParameterException
+               | InvalidInputException
                | NonExhaustivePatternException
                deriving (Eq, Show)
 
