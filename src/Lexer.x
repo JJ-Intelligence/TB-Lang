@@ -11,6 +11,7 @@ $alpha = [a-zA-Z]
 -- alphabetic characters
 
 tokens :-
+    \n                                  { \p _ -> TokenSeq p }
     $white+                             ;
     "--".*                              ;
 
