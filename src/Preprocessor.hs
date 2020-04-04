@@ -30,9 +30,12 @@ insertBuiltIn local = foldr (\(s,t) acc -> Map.insert s [t] acc) local ls
             ("peekN", TFunc [TInt, TRef $ TIterable $ TGeneric "a"] (TList $ TGeneric "a") []),
             ("isEmpty", TFunc [TRef $ TIterable $ TGeneric "a"] (TBool) []),
             ("hasElems", TFunc [TInt, TRef $ TIterable $ TGeneric "a"] (TBool) []),
-            ("EmptyListException", (TException)),
-            ("IndexOutOfBoundException", (TException)),
-            ("StreamOutOfInputException", (TException))]
+            ("throw", TFunc [TException] (TNone) []),
+            ("EmptyListException", TException),
+            ("IndexOutOfBoundException", TException),
+            ("StreamOutOfInputException", TException),
+            ("InvalidParameterException", TException),
+            ("NonExhaustivePatternException", TException)]
 
 preprocess :: Expr -> IO ()
 preprocess e = do
@@ -181,6 +184,33 @@ process (Var s) state@(global, local, ft) = do
             exitFailure
         else return ()
     return ((fromJust t), state)
+
+process (TryCatch e1 ps e2) (global, local, ft) = do
+
+    foldr (\e acc -> do
+            (t', (global', local', ft')) <- process e (global, local, ft)
+
+            if length t' /= 1 || head t' /= TException then do
+                printStdErr ("ERROR: catch block parameters should all have Exception types."
+                    ++ "\nIn catch parameters \'" ++ (show ps) ++ "\'"
+                    ++ "\nValue \'" ++ (show e) ++ "\' has type " ++ (show t') ++ ", but it should have type " ++ (show TException))
+                exitFailure
+            else
+                return ()
+
+            acc' <- acc
+            return (acc'+1)
+        ) (return 0) (paramsToList ps)
+
+    (t', (global', local', ft')) <- process e1 (global, local, ft)
+    (t', (global', local', ft')) <- process e2 (global, local, ft)
+    return ([TNone], (global', local', ft'))
+
+
+    where
+        paramsToList :: Parameters -> [Expr]
+        paramsToList FuncParamEnd = []
+        paramsToList (FuncParam e1 e2) = e1 : paramsToList e2 
 
 
 process (FuncCall s ps) (global, local, (ft, cs)) = do
@@ -600,8 +630,3 @@ lookupT name (global, local)
     where
         lLookup = Map.lookup name local
         gLookup = Map.lookup name global
-
-printStdErr :: String -> IO ()
-printStdErr s = do
-    hPutStrLn stderr s
-    return ()

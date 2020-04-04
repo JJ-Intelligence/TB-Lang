@@ -6,7 +6,10 @@ import qualified Data.Map.Strict as Map
 import qualified Data.IntMap.Lazy as MapL
 import Data.Maybe
 import Data.List
+import Data.Char
 import System.IO (isEOF)
+import System.IO (hPutStrLn, stderr)
+import System.Exit (exitFailure)
 import Debug.Trace
 
 -- Reserved elements of the Store.
@@ -67,8 +70,10 @@ insertReserved env store = helper ls env (MapL.insert storedGlobalEnv (GlobalEnv
                     [([VVar "e"], BuiltInFunc "throw" [Var "e"])])),
                 ("EmptyListException", (VException EmptyListException)),
                 ("IndexOutOfBoundException", (VException IndexOutOfBoundException)),
-                ("StreamOutOfInputException", (VException StreamOutOfInputException))
-                    ]
+                ("StreamOutOfInputException", (VException StreamOutOfInputException)),
+                ("InvalidParameterException", (VException InvalidParameterException)),
+                ("NonExhaustivePatternException", (VException NonExhaustivePatternException))]
+
           helper xs env store = foldr (\(s,e) (env', store', a) -> (Map.insert s a env', MapL.insert a e store', a+1)) (env, store, builtInFuncStart) xs
 
 -- interpret :: String -> State
@@ -189,8 +194,10 @@ step (Value e1, env, store, nextAddr, AddressExprFrame:kon) = step (Value $ VRef
 
 -- Function blocks ({ Expr }), which must have a 'return' statement.
 step (FuncBlock e1, env, store, nextAddr, kon) = do
-    (Value e2, env', store', nextAddr', _) <- step (e1, env, store, nextAddr, FuncBlockFrame:[Done])
-    step (Value e2, env', store', nextAddr', kon)
+    (Value e2, env', store', nextAddr', kon') <- step (e1, env, store, nextAddr, FuncBlockFrame:[Done])
+    case head kon' of
+        (ThrownException ex) -> return (Value e2, env', store', nextAddr', kon')
+        _ -> step (Value e2, env', store', nextAddr', kon)
 
 step (Return e1, env, store, nextAddr, kon) = step (e1, env, store, nextAddr, ReturnFrame:kon)
 step (Value e1, env, store, nextAddr, FuncBlockFrame:kon) = return (Value VNone, env, store, nextAddr, kon)
@@ -198,37 +205,64 @@ step (Value e1, env, store, nextAddr, FuncBlockFrame:kon) = return (Value VNone,
 -- Returning from a function.
 step (Value e1, env, store, nextAddr, ReturnFrame:kon) = return (Value e1, env, store, nextAddr, kon)
 
+step (TryCatch e1 ps e2, env, store, nextAddr, kon) = step (e1, env, store, nextAddr, (CatchFrame (evaluateCatchParams ps) e2 env):kon)
+    where
+        evaluateCatchParams :: Parameters -> [ExprValue]
+        evaluateCatchParams FuncParamEnd = []
+        evaluateCatchParams (FuncParam (Var x) e2) = (lookupVar x env store) : evaluateCatchParams e2
+
 -- User-defined function calls.
 step (FuncCall s ps, env, store, nextAddr, kon) = do
     (args, env', store', nextAddr') <- evaluateArgs ps env store nextAddr []
     (e1, env'', store'', nextAddr'') <- handleFuncArgs args env' store' nextAddr' s -- Pattern match
-    (Value e2, _, store''', _, _) <- step (e1, env'', store'', nextAddr'', ReturnFrame:[Done]) -- Recurse into function call.
+    (Value e2, _, store''', _, funcKon) <- step (e1, env'', store'', nextAddr'', ReturnFrame:[Done]) -- Recurse into function call.
 
-    step (Value e2, env', store''', nextAddr', kon) -- Continue after function call returns.
+    case head funcKon of
+        (ThrownException ex) -> do case popKon kon ex of
+                                    ((CatchFrame cps e2 cenv):kon') -> step (e2, cenv, store, nextAddr, kon') 
+                                    (ReturnFrame:kon') -> return (Value VNone, env, store, nextAddr, (ThrownException ex):[Done])
+                                    (FuncBlockFrame:kon') -> return (Value VNone, env, store, nextAddr, (ThrownException ex):[Done])
+                                    (Done:kon') -> do
+                                        printStdErr (show ex)
+                                        exitFailure
+
+        _ -> step (Value e2, env', store''', nextAddr', kon) -- Continue after function call returns.
+
+    where
+        popKon :: Kon -> ExprValue -> Kon
+        popKon k@((CatchFrame cps e2 cenv):kon) v
+            | v `elem` cps = k
+            | otherwise = popKon kon v
+        popKon k@(FuncBlockFrame:kon) v = k
+        popKon k@(ReturnFrame:kon) v = k
+        popKon k@(Done:kon) v = k
+        popKon (_:kon) v = popKon kon v
 
 -- Built-in functions.
 -- List (pass-by-value) operations:
 step (BuiltInFunc "tail" [Var xs], env, store, nextAddr, kon)
     | length ys > 0 = return (Value $ VList t $ tail ys, env, store, nextAddr, kon)
-    | otherwise = error "In tail function call, length of the list is 0."
+    | otherwise = step (throwException "EmptyListException", env, store, nextAddr, kon)
     where 
         (VList t ys) = lookupVar xs env store
 
 step (BuiltInFunc "head" [Var xs], env, store, nextAddr, kon)
     | length ys > 0 = return (Value $ head ys, env, store, nextAddr, kon)
-    | otherwise = error "In head function call, length of the list is 0."
+    | otherwise = step (throwException "EmptyListException", env, store, nextAddr, kon)
     where 
         (VList t ys) = lookupVar xs env store
 
 step (BuiltInFunc "drop" [Var n, Var xs], env, store, nextAddr, kon) 
-    | n' < 0 = error "Cannot pass in a negative value to drop function."
+    | n' < 0 = step (throwException "InvalidParameterException", env, store, nextAddr, kon)
+    | length ys < n' = step (throwException "IndexOutOfBoundException", env, store, nextAddr, kon)
     | otherwise = return (Value $ VList t $ drop n' ys, env, store, nextAddr, kon)
     where 
         (VList t ys) = lookupVar xs env store
         (VInt n') = lookupVar n env store
 
 step (BuiltInFunc "take" [Var n, Var xs], env, store, nextAddr, kon) 
-    | n' < 0 = error "Cannot pass in a negative value to take function."
+    | n' < 0 = step (throwException "InvalidParameterException", env, store, nextAddr, kon)
+    | length ys < n' = step (throwException "IndexOutOfBoundException", env, store, nextAddr, kon)
     | otherwise = return (Value $ VList t $ take n' ys, env, store, nextAddr, kon)
     where 
         (VList t ys) = lookupVar xs env store
@@ -239,8 +273,8 @@ step (BuiltInFunc "length" [Var xs], env, store, nextAddr, kon) = return (Value 
         (VList t ys) = lookupVar xs env store
 
 step (BuiltInFunc "get" [Var n, Var xs], env, store, nextAddr, kon)
-    | n' < 0 = error "Cannot pass in a negative value to get function."
-    | n' >= length ys = error "IndexOutOfBoundsException in get function."
+    | n' < 0 = step (throwException "InvalidParameterException", env, store, nextAddr, kon)
+    | n' >= length ys = step (throwException "IndexOutOfBoundException", env, store, nextAddr, kon)
     | otherwise = return (Value $ ys!!n', env, store, nextAddr, kon)
     where 
         (VList t ys) = lookupVar xs env store
@@ -250,14 +284,18 @@ step (BuiltInFunc "get" [Var n, Var xs], env, store, nextAddr, kon)
 -- List/Stream reference (pass-by-reference) operations:
 step (BuiltInFunc "pop" [Var p], env, store, nextAddr, kon) = case v of
         Just (VList t xs) -> case (length xs > 0) of
-                True  -> return (Value $ head xs, env, updateStore store r (VList t (tail xs)), nextAddr, kon)
-                False -> error $ "Length of referenced list must be at least 1 in pop function."
+            True  -> return (Value $ head xs, env, updateStore store r (VList t (tail xs)), nextAddr, kon)
+            False -> step (throwException "EmptyListException", env, store, nextAddr, kon)
 
         Just (VStream i xs) -> do
-                (ys, store') <- dropStreamInput (VStream i xs) 1 store
-                case ys of
+            dropInp <- dropStreamInput (VStream i xs) 1 store
+            case dropInp of
+                (Left ex) -> step (throwException (read ex), env, store, nextAddr, kon)
+                (Right (ys, store')) -> 
+
+                    case ys of
                         [VInt n] -> return (Value $ VInt n, env, store', nextAddr, kon)
-                        _        -> error "EndOfStreamException - stream is empty in pop function."
+                        _        -> step (throwException "StreamOutOfInputException", env, store, nextAddr, kon)
 
     where 
         (VRef r) = lookupVar p env store
@@ -265,13 +303,18 @@ step (BuiltInFunc "pop" [Var p], env, store, nextAddr, kon) = case v of
 
 step (BuiltInFunc "popN" [Var n, Var p], env, store, nextAddr, kon) = case v of
         Just (VList t xs) -> case (length xs >= n') of
-                True  -> return (Value $ VList t $ take n' xs, env, updateStore store r (VList t (drop n' xs)), nextAddr, kon)
-                False -> error $ "Length of referenced list must be greater than or equal to 'n' in popN function."
+            True  -> return (Value $ VList t $ take n' xs, env, updateStore store r (VList t (drop n' xs)), nextAddr, kon)
+            False -> step (throwException "EmptyListException", env, store, nextAddr, kon)
 
         Just (VStream i xs) -> do
-                (ys, store') <- dropStreamInput (VStream i xs) n' store
-                case (ys == [] || VNone `elem` ys) of
-                        True  -> error "EndOfStreamException - unable to pop 'n' elements from the stream."
+            dropInp <- dropStreamInput (VStream i xs) n' store
+
+            case dropInp of
+                (Left ex) -> step (throwException (read ex), env, store, nextAddr, kon)
+                (Right (ys, store')) -> 
+
+                    case (ys == [] || VNone `elem` ys) of
+                        True  -> step (throwException "StreamOutOfInputException", env, store, nextAddr, kon)
                         False ->  return (Value $ VList (TList TInt) ys, env, store', nextAddr, kon)
     
     where 
@@ -281,14 +324,18 @@ step (BuiltInFunc "popN" [Var n, Var p], env, store, nextAddr, kon) = case v of
 
 step (BuiltInFunc "peek" [Var p], env, store, nextAddr, kon) = case v of
         Just (VList t xs) -> case (length xs > 0) of
-                True  -> return (Value $ head xs, env, store, nextAddr, kon)
-                False -> error $ "Length of referenced list must be at least 1 in peek function."
+            True  -> return (Value $ head xs, env, store, nextAddr, kon)
+            False -> step (throwException "EmptyListException", env, store, nextAddr, kon)
 
         Just (VStream i xs) -> do
-                (ys, store') <- peekStreamInput (VStream i xs) 1 store
-                case ys of
+            peekInp <- peekStreamInput (VStream i xs) 1 store
+            case peekInp of
+                (Left ex) -> step (throwException (read ex), env, store, nextAddr, kon)
+                (Right (ys, store')) -> 
+
+                    case ys of
                         [VInt n] -> return (Value $ VInt n, env, store', nextAddr, kon)
-                        _        -> error "EndOfStreamException - stream is empty in peek function."
+                        _        -> step (throwException "StreamOutOfInputException", env, store, nextAddr, kon)
 
     where 
         (VRef r) = lookupVar p env store
@@ -297,12 +344,16 @@ step (BuiltInFunc "peek" [Var p], env, store, nextAddr, kon) = case v of
 step (BuiltInFunc "peekN" [Var n, Var p], env, store, nextAddr, kon) = case v of
         Just (VList t xs) -> case (length xs >= n') of
                 True  -> return (Value $ VList t $ take n' xs, env, updateStore store r (VList t xs), nextAddr, kon)
-                False -> error $ "Length of referenced list must be greater than or equal to 'n' in peekN function."
+                False -> step (throwException "IndexOutOfBoundException", env, store, nextAddr, kon)
 
         Just (VStream i xs) -> do
-                (ys, store') <- peekStreamInput (VStream i xs) n' store
-                case (ys == [] || VNone `elem` ys) of
-                        True  -> error "EndOfStreamException - unable to peek 'n' elements from the stream."
+            peekInp <- peekStreamInput (VStream i xs) n' store
+            case peekInp of
+                (Left ex) -> step (throwException (read ex), env, store, nextAddr, kon)
+                (Right (ys, store')) ->
+                    
+                    case (ys == [] || VNone `elem` ys) of
+                        True  -> step (throwException "StreamOutOfInputException", env, store, nextAddr, kon)
                         False ->  return (Value $ VList (TList TInt) ys, env, store', nextAddr, kon)
     
     where 
@@ -314,8 +365,10 @@ step (BuiltInFunc "isEmpty" [Var p], env, store, nextAddr, kon) = case v of
         Just (VList t xs) -> return (Value $ VBool (length xs == 0), env, store, nextAddr, kon)
 
         Just (VStream i xs) -> do
-                (ys, store') <- peekStreamInput (VStream i xs) 1 store
-                return (Value $ VBool (length ys == 0 || VNone `elem` ys), env, store', nextAddr, kon)
+            peekInp <- peekStreamInput (VStream i xs) 1 store
+            case peekInp of
+                (Left ex) -> step (throwException (read ex), env, store, nextAddr, kon)
+                (Right (ys, store')) -> return (Value $ VBool (length ys == 0 || VNone `elem` ys), env, store', nextAddr, kon)
 
     where 
         (VRef r) = lookupVar p env store
@@ -325,18 +378,15 @@ step (BuiltInFunc "hasElems" [Var n, Var p], env, store, nextAddr, kon) = case v
         Just (VList t xs) -> return (Value $ VBool (length xs >= n'), env, store, nextAddr, kon)
 
         Just (VStream i xs) -> do
-                (ys, store') <- peekStreamInput (VStream i xs) n' store
-                return (Value $ VBool (length ys >= n' && not (VNone `elem` ys)), env, store', nextAddr, kon)
+            peekInp <- peekStreamInput (VStream i xs) n' store
+            case peekInp of
+                (Left ex) -> step (throwException (read ex), env, store, nextAddr, kon)
+                (Right (ys, store')) -> return (Value $ VBool (length ys >= n' && not (VNone `elem` ys)), env, store', nextAddr, kon)
 
     where 
         (VInt n') = lookupVar n env store
         (VRef r) = lookupVar p env store
         v = MapL.lookup r store
-
-step (BuiltInFunc "throw" [Var e], env, store, nextAddr, kon) =
-
-    where
-        v = (lookupVar e env store)
 
 -- IO Operations:
 step (BuiltInFunc "out" [Var a], env, store, nextAddr, kon) = do
@@ -361,6 +411,10 @@ step (BuiltInFunc "setIn" [Var xs], env, store, nextAddr, kon) = return (Value V
                                 Nothing -> MapL.insert (-x) (VStream x []) store'
                         ) store ys
 
+-- Exception operations:
+step (BuiltInFunc "throw" [Var e], env, store, nextAddr, kon) = return (Value VNone, env, store, nextAddr, (ThrownException v):kon)
+    where
+        v = (lookupVar e env store)
 
 -- Math binary operations.
 step (Op (MathOp op e1 e2), env, store, nextAddr, kon) = step (e1, env, store, nextAddr, (HBinOp $ BinMathOp op e2 env):kon)
@@ -500,6 +554,9 @@ step (Value _, env, store, nextAddr, (TerOp_H (TerForOp c n e)):kon) = step (n, 
 step (Value _, env, store, nextAddr, (TerOpH (TerForOp c n e)):kon) = step (c, env, store, nextAddr, (HTerOp (TerForOp c n e)):kon) -- Incremented vars.
 
 
+-- End of try block with no exception thrown.
+step (e, env, store, a, (CatchFrame _ _ _):kon) = step (e, env, store, a, kon)
+
 -- End of evaluation.
 step s@(_, _, _, _, [Done]) = return s
 
@@ -555,93 +612,98 @@ matchArgsToFunc store args (VFunc t ((ps,e1):xs)) = do
         else return (e1, fromJust ys, store')
 
         where
-            matchParamToArg :: ExprValue -> ExprValue -> [(String, ExprValue)] -> Store -> IO (Maybe [(String, ExprValue)], Store)
-            matchParamToArg (VList _ []) (VList _ []) ls store = return (Just ls, store)
-            matchParamToArg (VList _ [VList _ []]) (VList _ []) ls store = return (Just ls, store)
+            matchParamToArg :: ExprValue -> ExprValue -> [(String, ExprValue)] -> Store -> IO (Either Exception (Maybe [(String, ExprValue)], Store))
+            matchParamToArg (VList _ []) (VList _ []) ls store = return $ Right (Just ls, store)
+            matchParamToArg (VList _ [VList _ []]) (VList _ []) ls store = return $ Right (Just ls, store)
             matchParamToArg (VList _ [VVar s]) (VList t ys) ls store = matchParamToArg (VVar s) (VList t ys) ls store
 
             matchParamToArg (VList t (x:xs)) (VList t' (y:ys)) ls store = do
-                (e, store') <- matchParamToArg x y ls store
-                case e of
-                    Nothing -> return (Nothing, store')
-                    Just (ls') -> matchParamToArg (VList t xs) (VList t' ys) ls' store'
+                matchParam <- matchParamToArg x y ls store
+                case matchParam of
+                    (Left ex) -> return $ Left ex
+                    (Right (e, store')) -> 
+                        case e of
+                            Nothing -> return $ Right (Nothing, store')
+                            Just (ls') -> matchParamToArg (VList t xs) (VList t' ys) ls' store'
 
             matchParamToArg l@(VPointerList t xs) r@(VRef a) ls store
                 | v /= Nothing && ((isTList $ getType store v') || getType store v' == TStream) = matchPointerListToRef l r v' ls store 0
-                | otherwise = return (Nothing, store)
+                | otherwise = return $ Right (Nothing, store)
                 where v = MapL.lookup a store
                       (Just v') = v
 
                       isTList (TList _) = True
                       isTList _ = False
 
-            matchParamToArg (VPointer s) e2@(VRef a) ls store = return (Just ((s, e2):ls), store)
-            matchParamToArg _ e2@(VRef a) ls store = return (Nothing, store)
-            matchParamToArg (VVar s) e2 ls store = return (Just ((s, e2):ls), store)
-            matchParamToArg (VInt n) (VInt n') ls store = return $ if n == n' then (Just ls, store) else (Nothing, store)
-            matchParamToArg (VBool b) (VBool b') ls store = return $ if b == b' then (Just ls, store) else (Nothing, store)
-            matchParamToArg _ _ _ store = return (Nothing, store)
+            matchParamToArg (VPointer s) e2@(VRef a) ls store = return $ Right (Just ((s, e2):ls), store)
+            matchParamToArg _ e2@(VRef a) ls store = return $ Right (Nothing, store)
+            matchParamToArg (VVar s) e2 ls store = return $ Right (Just ((s, e2):ls), store)
+            matchParamToArg (VInt n) (VInt n') ls store = return $ Right $ if n == n' then (Just ls, store) else (Nothing, store)
+            matchParamToArg (VBool b) (VBool b') ls store = return $ Right $ if b == b' then (Just ls, store) else (Nothing, store)
+            matchParamToArg _ _ _ store = return $ Right (Nothing, store)
 
-            matchPointerListToRef :: ExprValue -> ExprValue -> ExprValue -> [(String, ExprValue)] -> Store -> Int -> IO (Maybe [(String, ExprValue)], Store)
-            matchPointerListToRef (VPointerList t []) _ _ ls store c = return (Just ls, store)
-            matchPointerListToRef (VPointerList _ [VList _ []]) r (VList _ []) ls store c = return (Just ls, store)
+            matchPointerListToRef :: ExprValue -> ExprValue -> ExprValue -> [(String, ExprValue)] -> Store -> Int -> IO (Either Exception (Maybe [(String, ExprValue)], Store))
+            matchPointerListToRef (VPointerList t []) _ _ ls store c = return $ Right (Just ls, store)
+            matchPointerListToRef (VPointerList _ [VList _ []]) r (VList _ []) ls store c = return $ Right (Just ls, store)
             matchPointerListToRef (VPointerList _ [VList _ []]) r st@(VStream _ _) ls store c = do
-                (xs, store') <- peekStreamInput st (c+1) store
-                if ((length xs)-1 < c || xs!!c /= VNone)
-                            then return (Nothing, store')
-                            else do
-                                (_, store'') <- dropStreamInput st c store'
-                                return (Just ls, store'')
+                peekInp <- peekStreamInput st (c+1) store
+                case peekInp of
+                    (Left ex) -> return $ Left ex
+                    (Right (xs, store')) -> 
+
+                        case ((length xs)-1 < c || xs!!c /= VNone) of
+                            True -> return $ Right (Nothing, store')
+                            False -> do
+
+                                dropInp <- dropStreamInput st c store'
+                                case dropInp of
+                                    (Left ex) -> return $ Left ex
+                                    (Right (_, store'')) -> return (Just ls, store'')
 
             matchPointerListToRef (VPointerList _ [VVar s]) r@(VRef a) e@(VList t ys) ls store c = 
-                return (Just ((s,r):ls), MapL.update (\x -> Just $ e) a store)
+                return $ Right (Just ((s,r):ls), MapL.update (\x -> Just $ e) a store)
 
             matchPointerListToRef (VPointerList _ [VVar s]) r@(VRef a) st@(VStream _ _) ls store c = do
-                (_, store') <- dropStreamInput st c store
-                return (Just ((s,r):ls), store')
+                dropInp <- dropStreamInput st c store
+                case dropInp of
+                    (Left ex) -> return $ Left ex
+                    (Right (_, store')) -> return $ Right (Just ((s,r):ls), store')
 
             matchPointerListToRef (VPointerList t (x:xs)) r (VList t' (y:ys)) ls store c = do
-                (e, store') <- matchParamToArg x y ls store
-                case e of
-                    Nothing -> return (Nothing, store')
-                    Just (ls') -> matchPointerListToRef (VPointerList t xs) r (VList t' ys) ls' store' c
+                matchParam <- matchParamToArg x y ls store
+                case matchParam of
+                    (Left ex) -> return $ Left ex
+                    (Right (e, store')) ->
+
+                        case e of
+                            Nothing -> return $ Right (Nothing, store')
+                            Just (ls') -> matchPointerListToRef (VPointerList t xs) r (VList t' ys) ls' store' c
 
             matchPointerListToRef (VPointerList t (x:xs)) r st@(VStream i _) ls store c = do
-                (ys, store') <- peekStreamInput st (c+1) store
+                peekInp <- peekStreamInput st (c+1) store
+                case peekInp of
+                    (Left ex) -> return $ Left ex
+                    (Right (ys, store')) -> do
 
-                if ((length ys)-1 < c) 
-                    then return (Nothing, store')
-                    else case ys!!c of
-                            VNone -> return (Nothing, store')
-                            
-                            y -> do
-                                (e, store'') <- matchParamToArg x y ls store'
-                                case e of
-                                    
-                                    Nothing -> return (Nothing, store'')
-                                    
-                                    Just (ls') -> matchPointerListToRef (VPointerList t xs) r st ls' store'' (c+1)
+                        case (length ys)-1 < c of
+                            True -> return $ Right (Nothing, store')
+                            False -> 
 
-                                        -- Evaluate and pair params to stream values.
-                                        -- Then, only drop items from the stream if doesn't return Nothing.
-                                        -- Maintain a counter c for the number of items to drop.
-                                        -- Start with c = 0
-                                        -- When peeking, peek c items, and get the c'th element
-                                        -- If e /= Nothing, then recurse with c+1.
+                                case ys!!c of
+                                    VNone -> return $ Right (Nothing, store')
+                                    y -> do
 
-            matchPointerListToRef _ _ _ _ store _ = return (Nothing, store)
+                                        matchParam <- matchParamToArg x y ls store'
+                                        case matchParam of
+                                            (Left ex) -> return $ Left ex
+                                            (Right (e, store'')) ->
 
--- TODO:
--- * Use generics in function type checking
--- * Finish compareTypes
--- * Finish getType
--- * Check that a VList holds a type
--- * Enforce that VLists can only have one type (i.e. Haskell-style lists)
--- * Whenever you first build a VList, ensure you are setting its type correctly
--- * Check operations for type checking
--- * Provide types for all built-in functions.
--- * Itr should have a type a -> e.g. in params put:
---      type f (Itr a) -> a
+                                                case e of
+                                                    Nothing -> return $ Right (Nothing, store'')
+                                                    Just (ls') -> matchPointerListToRef (VPointerList t xs) r st ls' store'' (c+1)
+
+            matchPointerListToRef _ _ _ _ store _ = return $ Right (Nothing, store)
+
 
 -- Get the type of a value.
 getType :: Store -> ExprValue -> Type
@@ -865,25 +927,9 @@ addToEnv env store nextAddr s = (Map.insert s addr env, addr)
 -- Updates an Address mapping in the store.
 -- If the inputted Address is not in the store, then it will be inserted.
 updateStore :: Store -> Address -> ExprValue -> Store
-
-updateStore store a e@(VFunc ft [])
-    | v == Nothing = MapL.insert a e store
-    | isFunc (fromJust v) = error $ "Error, functions type has already been declared!\n" ++ "Trying to store function with type " ++ (show ft) ++ " in address " ++ (show a) ++ ".\n" ++ "But this function already exists here:  " ++ (show $ fromJust v) ++ "\n" ++ (show store)-- Change me to allow functions to be overriden by local functions of the same name!
-    | otherwise = MapL.insert a e store
-    where 
-        v = MapL.lookup a store
-
-        isFunc (VFunc _ _) = True
-        isFunc _ = False
-
-updateStore store a (VFuncUnTypedDef xs)
-    | v == Nothing = error "Function type must be declared before the function definition!"
-    | otherwise = let (Just (VFunc (TFunc ts out cs) ys)) = v in 
-        case (length xs' == length ts && validType store cs ts xs') of
-                True -> MapL.update (\x -> Just (VFunc (TFunc ts out cs) (ys ++ xs))) a store
-                False -> error $ "Function definition doesn't match the function type.\n" ++ "Function def is " ++ (show xs) ++ "\nFunction type is " ++ (show (TFunc ts out cs))
-    where v = MapL.lookup a store
-          xs' = (fst $ head xs)
+updateStore store a e@(VFunc ft []) = MapL.insert a e store
+updateStore store a (VFuncUnTypedDef xs) = MapL.update (\x -> Just (VFunc (TFunc ts out cs) (ys ++ xs))) a store
+    where (Just (VFunc (TFunc ts out cs) ys)) = MapL.lookup a store
 
 updateStore store a e1
     | item == Nothing = MapL.insert a e1 store
@@ -892,81 +938,104 @@ updateStore store a e1
 
 -- Takes in stream num, num of values to get from the buffer, and the current store.
 -- Returns updated store and list of values retrieved.
-peekStreamInput :: ExprValue -> Int -> Store -> IO ([ExprValue], Store)
+peekStreamInput :: ExprValue -> Int -> Store -> IO (Either Exception ([ExprValue], Store))
 peekStreamInput st@(VStream i _) n store = do
-    (VStream i' ys, store') <- handleStreamInput st n store
-    return (take n ys, store')
-
+    inp <- handleStreamInput st n store
+    case inp of
+        (Left ex) -> return $ Left ex
+        (Right (VStream i' ys, store')) -> return (take n ys, store')
 peekStreamInput _ _ _ = error "peekStreamInput function only takes in a VStream type."
 
 -- Takes in stream num, num of values to get from the buffer, and the current store.
 -- Returns updated store and list of values retrieved.
-dropStreamInput :: ExprValue -> Int -> Store -> IO ([ExprValue], Store)
+dropStreamInput :: ExprValue -> Int -> Store -> IO (Either Exception ([ExprValue], Store))
 dropStreamInput st@(VStream i _) n store = do
-    (VStream i' ys, store') <- handleStreamInput st n store
-    return (take n ys, MapL.update (\x -> Just (VStream i' $ drop n ys)) (-i') store')
-
+    inp <- handleStreamInput st n store
+    case inp of
+        (Left ex) -> return $ Left ex
+        (Right (VStream i' ys, store')) -> return (take n ys, MapL.update (\x -> Just (VStream i' $ drop n ys)) (-i') store')
 dropStreamInput _ _ _ = error "dropStreamInput function only takes in a VStream type."
 
-handleStreamInput :: ExprValue -> Int -> Store -> IO (ExprValue, Store) -- Update to just take in address!
+handleStreamInput :: ExprValue -> Int -> Store -> IO (Either Exception (ExprValue, Store)) -- Update to just take in address!
 handleStreamInput (VStream i _) n store = do
     let (VStream _ xs) = fromJust $ MapL.lookup (-i) store
-    store' <- case length xs >= n of
-                        True -> return store
-                        False -> do updateStreams (n - length xs) store
 
-    return (fromJust $ MapL.lookup (-i) store', store')
+    case length xs >= n of
+        True -> return (fromJust $ MapL.lookup (-i) store, store)
+        False -> do
+            upStr <- updateStreams (n - length xs) store
+            case upStr of 
+                (Left ex) -> return $ Left ex
+                (Right store') -> return (fromJust $ MapL.lookup (-i) store', store')
 
 -- Input function. Reads in n values from a given sequence.
-updateStreams :: Int -> Store -> IO Store
+updateStreams :: Int -> Store -> IO (Either Exception Store)
 updateStreams n store = do
-    xss <- readInput [] n
+    inp <- readInput [] n
 
-    let ks = case MapL.lookup (inputStreamsToRead) store of
-                    Just (VList t ks') -> foldr (\(VInt k) acc -> k:acc) [] ks'
-                    Nothing -> []
+    case inp of
+        (Left ex) -> return $ Left ex
+        (Right xss) -> do
+            let ks = case MapL.lookup (inputStreamsToRead) store of
+                            Just (VList t ks') -> foldr (\(VInt k) acc -> k:acc) [] ks'
+                            Nothing -> []
 
-    return $ case xss of
-                [] -> case ks of
-                        [] -> helper 0 store
-                        _ -> foldl (\store' k -> MapL.update (\(VStream i ys) -> Just (VStream i (ys++[VNone]))) (-k) store') store ks
-                _ -> case ks of 
-                        [] -> fst $ foldl (\(store', c) xs -> case MapL.lookup c store' of
-                                                    Just (VStream i ys) -> (MapL.update (\x -> Just (VStream i (ys++xs))) c store', c-1)
-                                                    Nothing -> (MapL.insert c (VStream (abs c) xs) store', c-1)
-                                                    _ -> error "Should be a VStream in negative Store addresses."
-                                    ) (store, 0) xss
-                        _ -> case (length xss)-1 < (last ks) of
-                                    False -> foldl (\store' k -> MapL.update (\(VStream i ys) -> Just (VStream i (ys++(xss!!k)))) (-k) store') store ks
-                                    True -> error "Input length is less than the specified number of input streams."
+            return $ case xss of
+                        [] -> case ks of
+                                [] -> helper 0 store
+                                _ -> foldl (\store' k -> MapL.update (\(VStream i ys) -> Just (VStream i (ys++[VNone]))) (-k) store') store ks
+                        _ -> case ks of 
+                                [] -> fst $ foldl (\(store', c) xs -> case MapL.lookup c store' of
+                                                            Just (VStream i ys) -> (MapL.update (\x -> Just (VStream i (ys++xs))) c store', c-1)
+                                                            Nothing -> (MapL.insert c (VStream (abs c) xs) store', c-1)
+                                                            _ -> error "Should be a VStream in negative Store addresses."
+                                            ) (store, 0) xss
+                                _ -> case (length xss)-1 < (last ks) of
+                                            False -> foldl (\store' k -> MapL.update (\(VStream i ys) -> Just (VStream i (ys++(xss!!k)))) (-k) store') store ks
+                                            True -> error "Input length is less than the specified number of input streams."
 
-        where helper c store = case MapL.lookup c store of
-                                    Just (VStream i ys) -> helper (c-1) (MapL.update (\x -> Just (VStream i (ys++[VNone]))) c store)
-                                    Nothing -> store
+                where helper c store = case MapL.lookup c store of
+                                            Just (VStream i ys) -> helper (c-1) (MapL.update (\x -> Just (VStream i (ys++[VNone]))) c store)
+                                            Nothing -> store
 
 -- Read n lines of input into stream buffers (a list of lists).
-readInput :: [[ExprValue]] -> Int -> IO [[ExprValue]]
-readInput xss 0 = return xss
+readInput :: [[ExprValue]] -> Int -> IO (Either (Exception) [[ExprValue]])
+readInput xss 0 = return $ Right xss
 readInput [] n = do
     end <- isEOF
 
-    if end
-        then return []
-        else do line <- getLine
-                let line' = foldr (\x acc -> [VInt x]:acc) [] $ map (read :: String -> Int) $ words line
-                readInput line' (n-1)
+    case end of 
+        True -> return $ Right []
+        False -> do
+            line <- getLine
+            let wline = words line
+
+            case foldr (\b acc -> b && acc) True (map (all isDigits) wline) of
+                False -> return $ Left InvalidInputException
+                True -> do
+                    let line' = foldr (\x acc -> [VInt x]:acc) [] $ map (read :: String -> Int) wline
+                    readInput line' (n-1)
 
 readInput xss n = do 
     end <- isEOF
 
-    if end 
-        then return (helper xss (replicate (length xss) VNone))
-        else do line <- getLine
-                let line' = map ((\i -> VInt i) . (read :: String -> Int)) $ words line
-                let xss' = if (length xss /= length line') 
-                                then (error "Error in readInput function, input is not in the correct format.") 
-                                else (helper xss line')
-                readInput xss' (n-1)
+    case end of
+        True -> return $ Right (helper xss (replicate (length xss) VNone))
+        False -> do
+            line <- getLine
+            let wline = words line
+
+            case foldr (\b acc -> b && acc) True (map (all isDigits) wline) of
+                False -> return $ Left InvalidInputException
+                True -> do
+                    let line' = map ((\i -> VInt i) . (read :: String -> Int)) wline
+                    case length xss /= length line' of
+                        True -> return $ Left InvalidInputException
+                        False -> readInput (helper xss line') (n-1)
 
         where helper [] [] = []
               helper (ys:yss) (x:xs) = (ys ++ [x]) : helper yss xs
+
+-- Generates a function call for throwing an exception s.
+throwException :: String -> Expr
+throwException s = FuncCall "throw" (FuncParam (Var s) FuncParamEnd)

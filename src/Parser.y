@@ -20,6 +20,9 @@ import Expression
     func      { TokenFuncDef _ }
     return    { TokenReturn _ }
 
+    try       { TokenTry _ }
+    catch     { TokenCatch _ }
+
     ';'       { TokenSeq _ }
     '('       { TokenOpenParen _ }
     ')'       { TokenCloseParen _ }
@@ -107,6 +110,7 @@ E : E ';' E                                 { Seq $1 $3 }
   -- | '--' var                             { DefVar $2 (Op (MathOp Min (Var $2) (Literal $ EInt 1))) }
   | '&'E                                    { AddressExpr $2 }
   | '*'E %prec POINT                        { PointerExpr $2 }
+  | try '{' E '}' catch '(' P ')' '{' E '}' { TryCatch $3 $7 $10 }
   | FT                                      { $1 }
   | V                                       { $1 }
   | B                                       { $1 }

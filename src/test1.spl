@@ -1,0 +1,18 @@
+
+func f (n) = {
+    throw(EmptyListException);
+    out(8);
+    return(n);
+};
+type f (Int) -> Int;
+
+
+try {
+    out(1);
+    f(9);
+    out(7);
+} catch (x) {
+    out(2);
+};
+
+out(3);

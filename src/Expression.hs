@@ -2,6 +2,7 @@ module Expression where
 
 import qualified Data.Map.Strict as Map
 import qualified Data.IntMap.Lazy as MapL
+import System.IO (hPutStrLn, stderr)
 
 -- **CESK machine types**
 
@@ -39,6 +40,8 @@ data Frame = HBinOp BinOpFrame
            | FuncCallFrame String
            | ReturnFrame
            | FuncBlockFrame
+           | ThrownException ExprValue
+           | CatchFrame [ExprValue] Expr Environment
            | Done 
            deriving (Eq, Show)
 
@@ -106,6 +109,8 @@ instance Show ExprLiteral where
 data Exception = EmptyListException
                | IndexOutOfBoundException
                | StreamOutOfInputException
+               | InvalidParameterException
+               | NonExhaustivePatternException
                deriving (Eq, Show)
 
 data ExprValue = VInt Int
@@ -237,6 +242,7 @@ data Expr = If Expr Expr (Maybe ExprElif)
           | Seq Expr Expr
           | FuncBlock Expr
           | BuiltInFunc String [Expr]
+          | TryCatch Expr Parameters Expr
           deriving (Eq, Show)
 
 -- instance Show Expr where
@@ -257,3 +263,9 @@ data Expr = If Expr Expr (Maybe ExprElif)
 --   show (Seq e1 e2) = (show e1) ++ ";\n" ++ (show e2)
 --   show (FuncBlock e1) = "{" ++ (show e1) ++ "}"
 --   show (BuiltInFunc s _) = s
+
+printStdErr :: String -> IO ()
+printStdErr s = do
+    hPutStrLn stderr s
+    return ()
+
