@@ -14,21 +14,21 @@ tokens :-
     $white+                             ;
     "--".*                              ;
 
-    if                                  { \p s -> TokenIf p }
-    elif                                { \p s -> TokenElif p }
-    else                                { \p s -> TokenElse p }
-    while                               { \p s -> TokenWhile p }
-    func                                { \p s -> TokenFuncDef p }
+    if                                  { \p _ -> TokenIf p }
+    elif                                { \p _ -> TokenElif p }
+    else                                { \p _ -> TokenElse p }
+    while                               { \p _ -> TokenWhile p }
+    func                                { \p _ -> TokenFuncDef p }
     type                                { \p _ -> TokenFuncType p }
     \-\>                                { \p _ -> TokenReturnTypeArrow p }
-    return                              { \p s -> TokenReturn p }
-    for                                 { \p s -> TokenFor p }
+    return                              { \p _ -> TokenReturn p }
+    for                                 { \p _ -> TokenFor p }
 
-    \;                                  { \p s -> TokenSeq p }
-    \(                                  { \p s -> TokenOpenParen p }
-    \)                                  { \p s -> TokenCloseParen p }
-    \{                                  { \p s -> TokenOpenCurly p }
-    \}                                  { \p s -> TokenCloseCurly p }
+    \;                                  { \p _ -> TokenSeq p }
+    \(                                  { \p _ -> TokenOpenParen p }
+    \)                                  { \p _ -> TokenCloseParen p }
+    \{                                  { \p _ -> TokenOpenCurly p }
+    \}                                  { \p _ -> TokenCloseCurly p }
     \[                                  { \p _ -> TokenOpenSquare p }
     \]                                  { \p _ -> TokenCloseSquare p }
     \,                                  { \p _ -> TokenComma p }
@@ -48,12 +48,13 @@ tokens :-
     \/                                  { \p _ -> TokenDivide p }
     \^                                  { \p _ -> TokenExponent p }
     \%                                  { \p _ -> TokenModulus p }
-    \=\=                                { \p s -> TokenDoubleEquals p }
+    \=\=                                { \p _ -> TokenDoubleEquals p }
+    \!\=                                { \p _ -> TokenNotEquals p }
     \&\&                                { \p _ -> TokenAnd p }
     \|\|                                { \p _ -> TokenOr p }
     \<                                  { \p _ -> TokenLessThan p }
     \>                                  { \p _ -> TokenGreaterThan p }
-    \=                                  { \p s -> TokenEquals p }
+    \=                                  { \p _ -> TokenEquals p }
     \:                                  { \p _ -> TokenCons p }
 
     \*                                  { \p _ -> TokenStar p }
@@ -70,8 +71,8 @@ tokens :-
     \~                                  { \p _ -> TokenTypeConstraintTwiddle p }
 
     $digit+                             { \p s -> TokenInt (read s) p }
-    True                                { \p s -> TokenBool True p }
-    False                               { \p s -> TokenBool False p }
+    True                                { \p _ -> TokenBool True p }
+    False                               { \p _ -> TokenBool False p }
     None                                { \p _ -> TokenNone p }
 
     global                              { \p _ -> TokenGlobal p }
@@ -80,69 +81,70 @@ tokens :-
 {
 
 -- Lexeme Tokens.
-data Token =  TokenIf               {pos :: AlexPosn}
-            | TokenElif             {pos :: AlexPosn}
-            | TokenElse             {pos :: AlexPosn}
+data Token =  TokenIf                           { pos :: AlexPosn }
+            | TokenElif                         { pos :: AlexPosn }
+            | TokenElse                         { pos :: AlexPosn }
 
-            | TokenWhile            {pos :: AlexPosn}
-            | TokenFor              {pos :: AlexPosn}
+            | TokenWhile                        { pos :: AlexPosn }
+            | TokenFor                          { pos :: AlexPosn }
 
-            | TokenReturnTypeArrow  {pos :: AlexPosn}
-            | TokenFuncType         {pos :: AlexPosn}
-            | TokenFuncDef          {pos :: AlexPosn}
-            | TokenReturn           {pos :: AlexPosn}
+            | TokenReturnTypeArrow              { pos :: AlexPosn }
+            | TokenFuncType                     { pos :: AlexPosn }
+            | TokenFuncDef                      { pos :: AlexPosn }
+            | TokenReturn                       { pos :: AlexPosn }
             
-            | TokenSeq              {pos :: AlexPosn}
-            | TokenOpenParen        {pos :: AlexPosn}
-            | TokenCloseParen       {pos :: AlexPosn}
-            | TokenOpenCurly        {pos :: AlexPosn}
-            | TokenCloseCurly       {pos :: AlexPosn}
-            | TokenOpenSquare       {pos :: AlexPosn}
-            | TokenCloseSquare      {pos :: AlexPosn}
-            | TokenComma            {pos :: AlexPosn}
+            | TokenSeq                          { pos :: AlexPosn }
+            | TokenOpenParen                    { pos :: AlexPosn }
+            | TokenCloseParen                   { pos :: AlexPosn }
+            | TokenOpenCurly                    { pos :: AlexPosn }
+            | TokenCloseCurly                   { pos :: AlexPosn }
+            | TokenOpenSquare                   { pos :: AlexPosn }
+            | TokenCloseSquare                  { pos :: AlexPosn }
+            | TokenComma                        { pos :: AlexPosn }
 
-            | TokenPlusPlus         {pos :: AlexPosn}
-            | TokenMinusMinus       {pos :: AlexPosn}
-            | TokenPlusAssignment   {pos :: AlexPosn}
-            | TokenMinusAssignment  {pos :: AlexPosn}
-            | TokenMultiplyAssignment {pos :: AlexPosn}
-            | TokenDivideAssignment   {pos :: AlexPosn}
-            | TokenExponentAssignment {pos :: AlexPosn}
-            | TokenAndAssignment    {pos :: AlexPosn}
-            | TokenOrAssignment     {pos :: AlexPosn}
+            | TokenPlusPlus                     { pos :: AlexPosn }
+            | TokenMinusMinus                   { pos :: AlexPosn }
+            | TokenPlusAssignment               { pos :: AlexPosn }
+            | TokenMinusAssignment              { pos :: AlexPosn }
+            | TokenMultiplyAssignment           { pos :: AlexPosn }
+            | TokenDivideAssignment             { pos :: AlexPosn }
+            | TokenExponentAssignment           { pos :: AlexPosn }
+            | TokenAndAssignment                { pos :: AlexPosn }
+            | TokenOrAssignment                 { pos :: AlexPosn }
 
-            | TokenPlus             {pos :: AlexPosn}
-            | TokenMinus            {pos :: AlexPosn}
-            | TokenDivide           {pos :: AlexPosn}
-            | TokenExponent         {pos :: AlexPosn}
-            | TokenModulus          {pos :: AlexPosn}
-            | TokenEquals           {pos :: AlexPosn}
-            | TokenDoubleEquals     {pos :: AlexPosn}
-            | TokenAnd              {pos :: AlexPosn}
-            | TokenOr               {pos :: AlexPosn}
-            | TokenLessThan         {pos :: AlexPosn}
-            | TokenGreaterThan      {pos :: AlexPosn}
-            | TokenCons             {pos :: AlexPosn}
+            | TokenPlus                         { pos :: AlexPosn }
+            | TokenMinus                        { pos :: AlexPosn }
+            | TokenDivide                       { pos :: AlexPosn }
+            | TokenExponent                     { pos :: AlexPosn }
+            | TokenModulus                      { pos :: AlexPosn }
+            | TokenEquals                       { pos :: AlexPosn }
+            | TokenDoubleEquals                 { pos :: AlexPosn }
+            | TokenNotEquals                    { pos :: AlexPosn }
+            | TokenAnd                          { pos :: AlexPosn }
+            | TokenOr                           { pos :: AlexPosn }
+            | TokenLessThan                     { pos :: AlexPosn }
+            | TokenGreaterThan                  { pos :: AlexPosn }
+            | TokenCons                         { pos :: AlexPosn }
 
-            | TokenStar             {pos :: AlexPosn}
-            | TokenAddress          {pos :: AlexPosn}
+            | TokenStar                         { pos :: AlexPosn }
+            | TokenAddress                      { pos :: AlexPosn }
 
-            | TokenTypeInt          {pos :: AlexPosn}
-            | TokenTypeBool         {pos :: AlexPosn}
-            | TokenTypeNone         {pos :: AlexPosn}
-            | TokenTypeStream       {pos :: AlexPosn}
+            | TokenTypeInt                      { pos :: AlexPosn }
+            | TokenTypeBool                     { pos :: AlexPosn }
+            | TokenTypeNone                     { pos :: AlexPosn }
+            | TokenTypeStream                   { pos :: AlexPosn }
 
-            | TokenTypeConstraintEq {pos :: AlexPosn}
-            | TokenTypeConstraintItr {pos :: AlexPosn}
-            | TokenTypeConstraintOrd {pos :: AlexPosn}
-            | TokenTypeConstraintTwiddle {pos :: AlexPosn}
+            | TokenTypeConstraintEq             { pos :: AlexPosn }
+            | TokenTypeConstraintItr            { pos :: AlexPosn }
+            | TokenTypeConstraintOrd            { pos :: AlexPosn }
+            | TokenTypeConstraintTwiddle        { pos :: AlexPosn }
 
-            | TokenInt              {int :: Int, pos :: AlexPosn}
-            | TokenBool             {bool :: Bool, pos :: AlexPosn}
-            | TokenNone             {pos :: AlexPosn}
+            | TokenInt                          { int :: Int, pos :: AlexPosn }
+            | TokenBool                         { bool :: Bool, pos :: AlexPosn }
+            | TokenNone                         { pos :: AlexPosn }
 
-            | TokenGlobal           {pos :: AlexPosn}
-            | TokenVar              {name :: String, pos :: AlexPosn} 
+            | TokenGlobal                       { pos :: AlexPosn }
+            | TokenVar                          { name :: String, pos :: AlexPosn } 
             deriving (Eq) 
 
 -- Token instance of Show, used for error messages.
@@ -174,6 +176,7 @@ instance Show Token where
     show (TokenModulus _) = "% "
     show (TokenEquals _) = "= "
     show (TokenDoubleEquals _) = "== "
+    show (TokenNotEquals _) = "!= "
     show (TokenAnd _) = "&& "
     show (TokenOr _) = "|| "
     show (TokenLessThan _) = "< "

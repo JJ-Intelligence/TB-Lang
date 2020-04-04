@@ -95,19 +95,7 @@ step (Value e1, env, store, nextAddr, (HBinOp (BinSeqOp e2)):kon) = step (e2, en
 step (LocalAssign (DefVar s (FuncType ps out cs)), env, store, nextAddr, kon) = step (Value VNone, env', store', nextAddr', kon)
     where
         (env', store', nextAddr') = updateEnvStore env store nextAddr s (VFunc ft [])
-        ft = buildTFunc ps out cs
-
-        evaluateParams FuncParamEnd = []
-        evaluateParams (FuncParam (FuncType ps' out' cs') e3) = buildTFunc ps' out' cs' : evaluateParams e3
-        evaluateParams (FuncParam (ExprType t) e3) = t : evaluateParams e3
-
-        evaluateOut (ExprType t) = t
-        evaluateOut (FuncType ps' out' cs') = buildTFunc ps' out' cs'
-
-        evaluateConstraints FuncParamEnd = []
-        evaluateConstraints (FuncParam (TypeConstraint cl g) e3) = (g, cl) : evaluateConstraints e3
-
-        buildTFunc ps out cs = TFunc (evaluateParams ps) (evaluateOut out) (if cs == Nothing then [] else evaluateConstraints $ fromJust cs)
+        ft = evaluateFuncType (FuncType ps out cs)
 
 -- Defining a new Function.
 step (LocalAssign (DefVar s (Func ps e1)), env, store, nextAddr, kon)
@@ -372,7 +360,7 @@ step (Value (VInt n'), env', store, nextAddr, (BinOpH (BinMathOp op (Value (VInt
                     Min -> n - n'
                     Mult -> n * n'
                     Div -> n `div` n'
-                    Exp -> n ^ n'
+                    Exp -> n ^ n' 
                     Mod -> n `mod` n'
 
 -- Adding 2 lists together.
@@ -419,22 +407,29 @@ step (Value e2, env', store, nextAddr, (BinOpH (BinCompOp Or (Value e1) env)):ko
 
 -- Comparison <, >, == operations.
 step (Value e1, env', store, nextAddr, (BinOpH (BinCompOp LessThan (Value e2) env)):kon) 
-    | isChildOf t1 COrd && isChildOf t2 COrd && t1 == t2 = step (Value $ VBool $ e1 < e2, env, store, nextAddr, kon)
+    | isChildOf [] t1 ([], COrd) && isChildOf [] t2 ([], COrd) && t1 == t2 = step (Value $ VBool $ e1 < e2, env, store, nextAddr, kon)
     | otherwise = error $ "Type error \n" ++ (show $ Value e1)++"\n"++(show LessThan)++"\n"++(show $ Value e2) ++"\nInteger"
     where
         t1 = getType store e1
         t2 = getType store e2
 
 step (Value e1, env', store, nextAddr, (BinOpH (BinCompOp GreaterThan (Value e2) env)):kon) 
-    | isChildOf t1 COrd && isChildOf t2 COrd && t1 == t2 = step (Value $ VBool $ e1 > e2, env, store, nextAddr, kon)
+    | isChildOf [] t1 ([], COrd) && isChildOf [] t2 ([], COrd) && t1 == t2 = step (Value $ VBool $ e1 > e2, env, store, nextAddr, kon)
     | otherwise = error $ "Type error \n" ++ (show $ Value e1)++"\n"++(show GreaterThan)++"\n"++(show $ Value e2) ++"\nInteger"
     where
         t1 = getType store e1
         t2 = getType store e2
 
 step (Value e2, env', store, nextAddr, (BinOpH (BinCompOp Equality (Value e1) env)):kon)
-    | isChildOf t1 CEq && isChildOf t2 CEq && t1 == t2 = step (Value $ VBool $ e1 == e2, env, store, nextAddr, kon)
+    | isChildOf [] t1 ([], CEq) && isChildOf [] t2 ([], CEq) && t1 == t2 = step (Value $ VBool $ e1 == e2, env, store, nextAddr, kon)
     | otherwise = error $ "Type error \n" ++ (show $ Value e1)++"\n"++(show Equality)++"\n"++(show $ Value e2)
+    where
+        t1 = getType store e1
+        t2 = getType store e2
+
+step (Value e2, env', store, nextAddr, (BinOpH (BinCompOp NotEquals (Value e1) env)):kon)
+    | isChildOf [] t1 ([], CEq) && isChildOf [] t2 ([], CEq) && t1 == t2 = step (Value $ VBool $ e1 /= e2, env, store, nextAddr, kon)
+    | otherwise = error $ "Type error \n" ++ (show $ Value e1)++"\n"++(show NotEquals)++"\n"++(show $ Value e2)
     where
         t1 = getType store e1
         t2 = getType store e2
@@ -517,7 +512,7 @@ handleFuncArgs args env store nextAddr s = do
     let fv@(VFunc (TFunc ts _ cs) _) = (lookupVar s env store)
 
     case validType store cs ts args of
-        False -> error "Type error, invalid argument for function."
+        False -> error $ "Type error, invalid argument for function:\n" ++ (show cs) ++ "\n" ++ (show ts) ++ "\n" ++ (show args)
 
         True -> do
             (e1, xs, store') <- matchArgsToFunc store args fv
@@ -664,6 +659,7 @@ getType store (VPointerList TParamList xs)
 
 getType store (VList t xs) = t
 getType store (VPointerList t xs) = t
+getType store (VFunc t xs) = t
 getType _ e = error (show e)
 
 evaluateListType :: Store -> [ExprValue] -> Type -> Type -- Used for checking list types of parameter lists
@@ -708,35 +704,85 @@ compareTypes tc (TList e1) (TList TEmpty) = True
 compareTypes tc (TList e1) (TList e2) = compareTypes tc e1 e2
 compareTypes tc (TList _) (TParamList) = True
 compareTypes tc (TRef e1) (TRef e2) = compareTypes tc e1 e2
+compareTypes tc (TGeneric s) g@(TGeneric s')
+    | s == s' = True
+    | c == Nothing = True
+    | otherwise = isChildOf tc g (s, fromJust c)
+    where
+        c = lookup s tc
+
+compareTypes tc (TGeneric s) TParamList = True
+
 compareTypes tc (TGeneric s) e2
-    | c == Nothing = True -- Generic can be anything
-    | otherwise = isChildOf e2 (fromJust c)
-    where c = lookup s tc
+    | c == Nothing = if isPrimitive e2 then True else False
+    | c == Nothing = False
+    | otherwise = isChildOf tc e2 (s, fromJust c)
+    where 
+        c = lookup s tc
+
+        isPrimitive TInt = True
+        isPrimitive TBool = True
+        isPrimitive TNone = True
+        isPrimitive _ = False
+
 compareTypes tc (TIterable g) (TStream) = compareTypes tc g TInt
 compareTypes tc (TIterable g) (TList e2) = compareTypes tc g e2
 compareTypes tc (TIterable g) (TParamList) = True
 compareTypes tc e1 e2 = e1 == e2
 
 -- Check if a type is a child of a type class.
-isChildOf :: Type -> TypeClass -> Bool
+isChildOf :: [(String, TypeClass)] -> Type -> (String, TypeClass) -> Bool
 
 -- Eq class.
-isChildOf TInt CEq = True
-isChildOf TBool CEq = True
-isChildOf TEmpty CEq = True
-isChildOf TNone CEq = True
-isChildOf (TList e1) CEq = isChildOf e1 CEq
-isChildOf _ CEq = False
+isChildOf tc TInt (s, CEq) = True
+isChildOf tc TBool (s, CEq) = True
+isChildOf tc TEmpty (s, CEq) = True
+isChildOf tc TNone (s, CEq) = True
+isChildOf tc (TList e1) (s, CEq) = isChildOf tc e1 (s, CEq)
+isChildOf tc (TGeneric a) (s, CEq)
+    | a == s = False -- a == s, so a can't be a child of s
+    | t == Nothing = False
+    | fromJust t == CEq = True
+    | otherwise = False
+    where t = lookup a tc
+isChildOf _ _ (_, CEq) = False
 
 -- Itr class.
-isChildOf (TList _) CItr = True
-isChildOf TStream CItr = True
-isChildOf _ CItr = False
+isChildOf tc (TList _) (s, CItr) = True
+isChildOf tc TStream (s, CItr) = True
+isChildOf tc (TGeneric a) (s, CItr)
+    | a == s = False
+    | t == Nothing = False
+    | fromJust t == CItr = True
+    | otherwise = False
+    where t = lookup a tc
+isChildOf _ _ (s, CItr) = False
 
 -- Ord class.
-isChildOf TInt COrd = True
-isChildOf (TList e1) COrd = isChildOf e1 COrd
-isChildOf _ COrd = False
+isChildOf tc TInt (s, COrd) = True
+isChildOf tc (TGeneric a) (s, COrd)
+    | a == s = False
+    | t == Nothing = False
+    | fromJust t == COrd = True
+    | otherwise = False
+    where t = lookup a tc
+isChildOf tc _ (s, COrd) = False
+
+-- Build a function type.
+evaluateFuncType :: Expr -> Type 
+evaluateFuncType (FuncType ps out cs) = buildTFunc ps out cs
+    where
+        buildTFunc ps out cs = TFunc (evaluateParams ps) (evaluateOut out) (if cs == Nothing then [] else evaluateConstraints $ fromJust cs)
+
+        evaluateParams FuncParamEnd = []
+        evaluateParams (FuncParam (FuncType ps' out' cs') e3) = buildTFunc ps' out' cs' : evaluateParams e3
+        evaluateParams (FuncParam (ExprType t) e3) = t : evaluateParams e3
+
+        evaluateOut (ExprType t) = t
+        evaluateOut (FuncType ps' out' cs') = buildTFunc ps' out' cs'
+
+        evaluateConstraints FuncParamEnd = []
+        evaluateConstraints (FuncParam (TypeConstraint cl g) e3) = (g, cl) : evaluateConstraints e3
 
 
 -- Lookup a variable in the Environment (if not in local env, then search global env) and Store. 

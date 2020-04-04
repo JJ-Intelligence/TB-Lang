@@ -3,6 +3,7 @@ import System.Environment
 import Evaluator
 import Lexer
 import Parser
+import Preprocessor
 
 main :: IO ()
 main = do args <- getArgs
@@ -13,6 +14,8 @@ main = do args <- getArgs
                     print "Parsed: "
                     print xs
                     putStr "\n"
+                    print "Preprocessing: "
+                    preprocess xs
                     print "Evaluating: "
                     startEvaluator xs
             _ -> print "Wrong number of arguments"

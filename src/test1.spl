@@ -1,31 +1,25 @@
 
-type solve ((Itr Int)*, (Itr Int)*) -> NoneType;
-func solve (*[], *bs) = None; 
-func solve (*[a], *bs) = out(a); 
-func solve (*(x:y:as), *(z:bs)) = {
-    out ([x,y,z]);
-    solve (as, bs);
+type f ([b], [b]) -> b ~ (Eq b);
+func f (a:as, b:bs) = {
+    out(1);
+    return(1);
 };
 
-setIn([1,0]);
+out(f([1], [1]) > 2);
 
-as = in(0);
-bs = in(1);
+out(9223372036854775806 + 1);
 
-solve (as,bs);
+-- [TList a, TList b] ~ [(b, CEq)]
+-- [[a,as], [b,bs]]
 
+-- try {
 
-type f (a, a) -> Bool ~ (Eq a);
-func f (x, y) = x == y;
-
-out(f([1,2], [1,2]));
-
-v = {
-    k = 1;
-};
-
-out(k);
-out(v);
+--     head []
 
 
--- Error - k not in env outside of func block
+-- } catch (b) ~ (Exception b)
+
+
+EmptyListException
+IndexOutOfBoundException
+StreamOutOfInputException

@@ -60,7 +60,7 @@ data Type = TFunc [Type] Type [(String, TypeClass)]
           | TGeneric String
           | TConflict
           | TParamList
-          deriving (Eq)
+          deriving (Eq, Ord)
 
 instance Show Type where 
     show (TFunc ps out cs) = "TFunc " ++ (show ps) ++ " " ++ (show out) ++ " " ++ (show cs)
@@ -69,7 +69,7 @@ instance Show Type where
     show TEmpty = ""
     show TNone = "null"
     show (TIterable t) = "TIterable " ++ (show t)
-    show (TList x) = "["++(show x)++"]" 
+    show (TList x) = "TList ["++(show x)++"]" 
     show TStream = "Stream"
     show (TRef x) = "Ref " ++ (show x)
     show (TGeneric s) = s
@@ -156,6 +156,7 @@ instance Show BinOp where
 
 -- Comparison operations.
 data ExprComp = Equality
+              | NotEquals
               | And 
               | Or
               | LessThan
@@ -164,6 +165,7 @@ data ExprComp = Equality
 
 instance Show ExprComp where
   show Equality = "=="
+  show NotEquals = "!="
   show And = "&&"
   show Or = "||"
   show LessThan = "<"
@@ -201,7 +203,7 @@ data Assignment = DefVar String Expr
 data TypeClass = CEq
                | CItr
                | COrd
-               deriving (Eq, Show)
+               deriving (Eq, Ord, Show)
 
 data Expr = If Expr Expr (Maybe ExprElif)
           | While Expr Expr
