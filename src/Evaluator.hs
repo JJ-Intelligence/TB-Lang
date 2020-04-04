@@ -61,7 +61,11 @@ insertReserved env store = helper ls env (MapL.insert storedGlobalEnv (GlobalEnv
                     [([VVar "xs"], BuiltInFunc "isEmpty" [Var "xs"])])),
                 ("hasElems", (VFunc 
                     (TFunc [TInt, TRef $ TIterable $ TGeneric "a"] (TBool) []) 
-                    [([VVar "n", VVar "xs"], BuiltInFunc "hasElems" [Var "n", Var "xs"])]))]
+                    [([VVar "n", VVar "xs"], BuiltInFunc "hasElems" [Var "n", Var "xs"])])),
+                ("EmptyListException", (VException EmptyListException)),
+                ("IndexOutOfBoundException", (VException IndexOutOfBoundException)),
+                ("StreamOutOfInputException", (VException StreamOutOfInputException))
+                    ]
           helper xs env store = foldr (\(s,e) (env', store', a) -> (Map.insert s a env', MapL.insert a e store', a+1)) (env, store, builtInFuncStart) xs
 
 -- interpret :: String -> State
@@ -660,6 +664,7 @@ getType store (VPointerList TParamList xs)
 getType store (VList t xs) = t
 getType store (VPointerList t xs) = t
 getType store (VFunc t xs) = t
+getType store (VException e) = TException
 getType _ e = error (show e)
 
 evaluateListType :: Store -> [ExprValue] -> Type -> Type -- Used for checking list types of parameter lists
@@ -714,7 +719,7 @@ compareTypes tc (TGeneric s) g@(TGeneric s')
 compareTypes tc (TGeneric s) TParamList = True
 
 compareTypes tc (TGeneric s) e2
-    | c == Nothing = if isPrimitive e2 then True else False
+    | c == Nothing = if isPrimitive e2 then True else False  -- TODO fixme josh
     | c == Nothing = False
     | otherwise = isChildOf tc e2 (s, fromJust c)
     where 
@@ -723,7 +728,9 @@ compareTypes tc (TGeneric s) e2
         isPrimitive TInt = True
         isPrimitive TBool = True
         isPrimitive TNone = True
+        isPrimitive TException = True
         isPrimitive _ = False
+
 
 compareTypes tc (TIterable g) (TStream) = compareTypes tc g TInt
 compareTypes tc (TIterable g) (TList e2) = compareTypes tc g e2
@@ -738,6 +745,7 @@ isChildOf tc TInt (s, CEq) = True
 isChildOf tc TBool (s, CEq) = True
 isChildOf tc TEmpty (s, CEq) = True
 isChildOf tc TNone (s, CEq) = True
+isChildOf tc TException (s, CEq) = True
 isChildOf tc (TList e1) (s, CEq) = isChildOf tc e1 (s, CEq)
 isChildOf tc (TGeneric a) (s, CEq)
     | a == s = False -- a == s, so a can't be a child of s

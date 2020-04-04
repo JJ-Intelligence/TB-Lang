@@ -29,7 +29,10 @@ insertBuiltIn local = foldr (\(s,t) acc -> Map.insert s [t] acc) local ls
             ("peek", TFunc [TRef $ TIterable $ TGeneric "a"] (TGeneric "a") []),
             ("peekN", TFunc [TInt, TRef $ TIterable $ TGeneric "a"] (TList $ TGeneric "a") []),
             ("isEmpty", TFunc [TRef $ TIterable $ TGeneric "a"] (TBool) []),
-            ("hasElems", TFunc [TInt, TRef $ TIterable $ TGeneric "a"] (TBool) [])]
+            ("hasElems", TFunc [TInt, TRef $ TIterable $ TGeneric "a"] (TBool) []),
+            ("EmptyListException", (TException)),
+            ("IndexOutOfBoundException", (TException)),
+            ("StreamOutOfInputException", (TException))]
 
 preprocess :: Expr -> IO ()
 preprocess e = do

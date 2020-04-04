@@ -4,6 +4,9 @@
 	"name": "TB",
 	"patterns": [
 		{
+			"include": "#operator"
+		},
+		{
 			"include": "#keywords"
 		},
 		{
@@ -14,12 +17,15 @@
 		},
 		{
 			"include": "#vars"
-		},
-		{
-			"include": "#operators"
 		}
 	],
 	"repository": {
+		"operator": {
+		  	"patterns": [{
+				"name": "keyword.other",
+				"match": "\\+|\\-|\\*"
+			}]
+		},
 		"keywords": {
 			"patterns": [{
 				"name": "keyword.control.tb",

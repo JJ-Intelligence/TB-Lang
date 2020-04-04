@@ -60,6 +60,7 @@ data Type = TFunc [Type] Type [(String, TypeClass)]
           | TGeneric String
           | TConflict
           | TParamList
+          | TException
           deriving (Eq, Ord)
 
 instance Show Type where 
@@ -75,6 +76,7 @@ instance Show Type where
     show (TGeneric s) = s
     show TConflict = "Conflict"
     show TParamList = "TParamList"
+    show TException = "Exception"
 
 -- **Expression type returned by Parser**
 
@@ -100,6 +102,12 @@ instance Show ExprLiteral where
   show Empty = "[]"
   show ENone = "null"
 
+-- [Position] is the call stack
+data Exception = EmptyListException
+               | IndexOutOfBoundException
+               | StreamOutOfInputException
+               deriving (Eq, Show)
+
 data ExprValue = VInt Int
                | VBool Bool
                | VVar String
@@ -111,6 +119,7 @@ data ExprValue = VInt Int
                | VFunc Type [([ExprValue], Expr)]
                | VFuncUnTypedDef [([ExprValue], Expr)]
                | VRef Address
+               | VException Exception
                | GlobalEnv Environment
                deriving (Eq)
 
@@ -129,6 +138,7 @@ instance Show ExprValue where
   show (GlobalEnv env) = "GlobalEnv " ++ (show env)
   show (VVar s) = "Var " ++ s
   show (VPointer s) = "VPointer " ++ s
+  show (VException ex) = "Exception " ++ (show ex)
 
 instance Ord ExprValue where
   (<) (VInt a) (VInt b) = a < b
