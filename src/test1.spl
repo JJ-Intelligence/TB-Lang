@@ -1,20 +1,4 @@
 
-type f (Int) -> Int;
-func f (n) = {
-    throw(EmptyListException);
-    out(8);
-    return(n);
-};
 
 xs = in(0);
-out(popN(6, xs));
-
-try {
-    out(1);
-    f(9);
-    out(7);
-} catch (EmptyListException) {
-    out(2);
-};
-
-out(3);
+popN(6, xs);
