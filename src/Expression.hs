@@ -132,7 +132,10 @@ data ExprValue = VInt Int
 instance Show ExprValue where
   show (VInt n) = show n
   show (VBool b) = show b
-  show (VList t xs) = "VList " ++ (show t) ++ " " ++ (show xs)
+  show (VList _ xs) = (foldr (\x acc -> x ++ "\n" ++ acc) "" $ init xs') ++ (last xs')
+    where
+        xs' = map show xs
+  -- show (VList t xs) = "VList " ++ (show t) ++ " " ++ (show xs)
   -- show (VList _ []) = ""
   -- show (VList _ [x]) = show x
   -- show (VList t (x:xs)) = (show x) ++ "\n" ++ (show $ VList t xs)

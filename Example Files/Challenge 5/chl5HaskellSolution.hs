@@ -2,8 +2,9 @@ module chl5HaskellSolution where
 
 main :: IO ()
 main = do
-    line <- (read :: String -> Int) $ words getLine
-    writeFile "exp5.txt" $ foldr (\i acc -> i ++ "\n" ++ acc) "" (solve (line!!0))
+    content <- readFile "input.txt"
+    let line = foldr (\x acc -> map (read :: String -> Int) (words x) : acc) [] $ lines content
+    writeFile "exp.txt" $ foldr (\i acc -> (show i) ++ "\n" ++ acc) "" (solve (map (!!0) line))
 
 solve :: [Int] -> [Int]
 solve [] = []

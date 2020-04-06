@@ -87,7 +87,7 @@ insertReserved env store = helper ls env (MapL.insert storedGlobalEnv (GlobalEnv
 startEvaluator :: Expr -> IO ()
 startEvaluator e = do
     s <- step (e, env, store, heapStart, [Done])
-    putStrLn $ "\nFinished evaluation.\n"
+    return ()
         where 
             (env, store, heapStart) = insertReserved (Map.empty) (MapL.empty)
 
@@ -410,7 +410,7 @@ step (BuiltInFunc "in" [Var n], env, store, nextAddr, kon) = return (Value $ VRe
                 Just (VStream i xs) -> store
                 Nothing -> updateStore store (-n') (VStream n' [])
 
-step (BuiltInFunc "setIn" [Var xs], env, store, nextAddr, kon) = return (Value VNone, env, store, nextAddr, kon)
+step (BuiltInFunc "setIn" [Var xs], env, store, nextAddr, kon) = return (Value VNone, env, store', nextAddr, kon)
     where 
         (VList t ys) = lookupVar xs env store
         store' = MapL.insert (inputStreamsToRead) (VList t (sort ys)) $ 
@@ -1024,7 +1024,7 @@ readInput [] n = do
             line <- getLine
             let wline = words line
 
-            case foldr (\b acc -> b && acc) True (map (all isDigit) wline) of
+            case foldr (\b acc -> b && acc) True (map (all (\x -> isDigit x || x=='-')) wline) of
                 False -> return $ Left InvalidInputException
                 True -> do
                     let line' = foldr (\x acc -> [VInt x]:acc) [] $ map (read :: String -> Int) wline
@@ -1039,7 +1039,7 @@ readInput xss n = do
             line <- getLine
             let wline = words line
 
-            case foldr (\b acc -> b && acc) True (map (all isDigit) wline) of
+            case foldr (\b acc -> b && acc) True (map (all (\x -> isDigit x || x=='-')) wline) of
                 False -> return $ Left InvalidInputException
                 True -> do
                     let line' = map ((\i -> VInt i) . (read :: String -> Int)) wline

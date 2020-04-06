@@ -11,11 +11,11 @@ main = do args <- getArgs
             [solution] -> do 
                     f <- readFile solution
                     let xs = parse $ alexScanTokens f
-                    print "Parsed: "
-                    print xs
-                    putStr "\n"
-                    print "Preprocessing: "
-                    preprocess xs
-                    print "Evaluating: "
+                    -- print "Parsed: "
+                    -- print xs
+                    -- putStr "\n"
+                    -- print "Preprocessing: "
+                    -- preprocess xs
+                    -- print "Evaluating: "
                     startEvaluator xs
             _ -> print "Wrong number of arguments"
