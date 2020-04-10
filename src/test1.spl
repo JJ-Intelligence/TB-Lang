@@ -1,4 +1,11 @@
 
+x = 1;
 
-xs = in(0);
-popN(6, xs);
+if (True) {
+    x = True;
+} else {
+    x = [];
+};
+
+[1] + [True];
+-- out(1);
