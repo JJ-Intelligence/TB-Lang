@@ -7,5 +7,10 @@ if (True) {
     x = [];
 };
 
-[1] + [True];
+-- [1] + [True];
 -- out(1);
+
+type f (Int, Bool) -> Int;
+func f (4, True) = 4;
+
+f(x, True);
