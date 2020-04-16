@@ -1,12 +1,24 @@
-module chl1HaskellSolution where
+module Chl1HaskellSolution where
+
+import qualified Data.Time.Clock.POSIX as Time -- DEBUGGING
+getTime = round `fmap` Time.getPOSIXTime -- DEBUGGING
 
 main :: IO ()
 main = do
-    line <- (read :: String -> Int) $ words getLine
-    writeFile "exp1.txt" $ foldr (\i acc -> i ++ "\n" ++ acc) "" (solve (line!!0) (line!!1))
+    content <- readFile "largeInput.txt"
+    let line = foldr (\x acc -> map (read :: String -> Int) (words x) : acc) [] $ lines content
+    solve (map (!!0) line) (map (!!1) line)
+    -- writeFile "exp.txt" $ foldr (\i acc -> (show i) ++ "\n" ++ acc) "" (solve (map (!!0) line) (map (!!1) line))
 
-solve :: [Int] -> [Int] -> [Int]
-solve [] bs = []
-solve [a] bs = [a]
-solve (a:a':as) (b:bs) = a : a' : b : solve as bs
+printInt a = do
+    t <- getTime
+    putStrLn $ (show a) ++ " : " ++ (show t)
 
+solve :: [Int] -> [Int] -> IO ()
+solve [] bs = return ()
+solve [a] bs = printInt a
+solve (a:a':as) (b:bs) = do
+    printInt a
+    printInt a'
+    printInt b
+    solve as bs

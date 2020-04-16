@@ -1,26 +1,27 @@
 -- Challenge 1, solution 1
--- func f (as, bs) = {
---     out(pop(as));
---     out(pop(as));
---     out(pop(bs));
--- };
-
--- while (hasElems(2, in(0)) && hasElems(1, in(1))) {
---     f(in(None), in(1));
--- }
--- out(
--- + :
--- -- jsdsdsdsd
-
--- Challenge 1, solution 1
-type solve ((Itr Int)*, (Itr Int)*) -> NoneType;
-func solve (*[], *bs) = None;
-func solve (*[a], *bs) = out([a]);
-func solve (*(a1:a2:as), *(b:bs)) = {
-    out([a1,a2,b]);
-    solve(as, bs);
-};
-
 setIn([0,1]);
 
-solve(in(0), in(1));
+as = in(0);
+bs = in(1);
+
+while (hasElems(2, as)) {
+    out(popN(2, as));
+    out(pop(bs));
+};
+
+if (isEmpty(as) == False) {
+    out(pop(as));
+};
+
+-- Challenge 1, solution 1
+-- type solve ((Itr Int)*, (Itr Int)*) -> NoneType;
+-- func solve (*[], *bs) = None;
+-- func solve (*[a], *bs) = out([a]);
+-- func solve (*(a1:a2:as), *(b:bs)) = {
+--     out([a1,a2,b]);
+--     solve(as, bs);
+-- };
+
+-- setIn([0,1]);
+
+-- solve(in(0), in(1));
