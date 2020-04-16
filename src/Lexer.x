@@ -1,19 +1,15 @@
-
-
 { 
 module Lexer where 
 }
 
 %wrapper "posn" 
 $digit = 0-9     
--- digits 
 $alpha = [a-zA-Z]    
--- alphabetic characters
 
 tokens :-
-    \n                                  { \p _ -> TokenSeq p }
     $white+                             ;
     "--".*                              ;
+    "/*".*"*/"                          ;
 
     if                                  { \p _ -> TokenIf p }
     elif                                { \p _ -> TokenElif p }
@@ -53,6 +49,8 @@ tokens :-
     \^                                  { \p _ -> TokenExponent p }
     \%                                  { \p _ -> TokenModulus p }
     \=\=                                { \p _ -> TokenDoubleEquals p }
+    \>\=                                { \p _ -> TokenGreaterThanEquals p }
+    \<\=                                { \p _ -> TokenLessThanEquals p }
     \!\=                                { \p _ -> TokenNotEquals p }
     \&\&                                { \p _ -> TokenAnd p }
     \|\|                                { \p _ -> TokenOr p }
@@ -60,6 +58,7 @@ tokens :-
     \>                                  { \p _ -> TokenGreaterThan p }
     \=                                  { \p _ -> TokenEquals p }
     \:                                  { \p _ -> TokenCons p }
+    \!                                  { \p _ -> TokenNot p }
 
     \*                                  { \p _ -> TokenStar p }
     \&                                  { \p _ -> TokenAddress p }
@@ -126,12 +125,15 @@ data Token =  TokenIf                           { pos :: AlexPosn }
             | TokenModulus                      { pos :: AlexPosn }
             | TokenEquals                       { pos :: AlexPosn }
             | TokenDoubleEquals                 { pos :: AlexPosn }
+            | TokenGreaterThanEquals            { pos :: AlexPosn }
+            | TokenLessThanEquals               { pos :: AlexPosn }
             | TokenNotEquals                    { pos :: AlexPosn }
             | TokenAnd                          { pos :: AlexPosn }
             | TokenOr                           { pos :: AlexPosn }
             | TokenLessThan                     { pos :: AlexPosn }
             | TokenGreaterThan                  { pos :: AlexPosn }
             | TokenCons                         { pos :: AlexPosn }
+            | TokenNot                          { pos :: AlexPosn }
 
             | TokenStar                         { pos :: AlexPosn }
             | TokenAddress                      { pos :: AlexPosn }
@@ -186,12 +188,15 @@ instance Show Token where
     show (TokenModulus _) = "% "
     show (TokenEquals _) = "= "
     show (TokenDoubleEquals _) = "== "
+    show (TokenGreaterThanEquals _) = ">= "
+    show (TokenLessThanEquals _) = "<= "
     show (TokenNotEquals _) = "!= "
     show (TokenAnd _) = "&& "
     show (TokenOr _) = "|| "
     show (TokenLessThan _) = "< "
     show (TokenGreaterThan _) = "> "
     show (TokenCons _) = ": "
+    show (TokenNot _) = "!"
 
     show (TokenStar _) = "* "
     show (TokenAddress _) = "&"

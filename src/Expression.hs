@@ -44,6 +44,7 @@ data Frame = HBinOp BinOpFrame
            | FuncCallFrame String
            | ReturnFrame
            | FuncBlockFrame
+           | BoolNotFrame
            | ThrownException ExprValue CallStack -- Exception and list of FuncCalls
            | CatchFrame [ExprValue] Expr Environment CallStack
            | Done 
@@ -244,6 +245,7 @@ data Expr = If Expr Expr (Maybe ExprElif)
           | DefPointerVar String Expr
           | PointerExpr Expr
           | AddressExpr Expr
+          | BooleanNotExpr Expr
           | GlobalVar String
           | Var String
           | Seq Expr Expr
@@ -275,6 +277,7 @@ instance Show Expr where
   show (DefPointerVar s e) = "*" ++ s ++ " = " ++ (show e)
   show (PointerExpr e) = "*(" ++ (show e) ++ ")"
   show (AddressExpr e) = "&(" ++ (show e) ++ ")"
+  show (BooleanNotExpr e) = "!(" ++ (show e) ++ ")"
   show (GlobalVar s) = "global " ++ s
   show (LocalAssign (DefVar s e1)) = s ++ " = " ++ (show e1)
   show (GlobalAssign (DefVar s e1)) = "global " ++ s ++ " = " ++ (show e1)

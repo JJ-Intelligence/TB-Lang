@@ -438,9 +438,14 @@ step (BuiltInFunc "throw" [Var e], env, store, nextAddr, callS, kon) = return (V
     where
         v = (lookupVar e env store)
 
+-- Boolean not operation.
+step (BooleanNotExpr e1, env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, (BoolNotFrame):kon)
+step (Value (VBool b), env, store, nextAddr, callS, (BoolNotFrame):kon) = step (Value $ VBool $ not b, env, store, nextAddr, callS, kon)
+
 -- Math binary operations.
 step (Op (MathOp op e1 e2), env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, (HBinOp $ BinMathOp op e2 env):kon)
 step (Value e1, env, store, nextAddr, callS, (HBinOp (BinMathOp op e2 env')):kon) = step (e2, env', store, nextAddr, callS, (BinOpH $ BinMathOp op (Value e1) env):kon)
+
 step (Value (VInt n'), env', store, nextAddr, callS, (BinOpH (BinMathOp op (Value (VInt n)) env)):kon) = step (Value $ VInt r, env, store, nextAddr, callS, kon)
     where r = case op of
                     Plus -> n + n'

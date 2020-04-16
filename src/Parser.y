@@ -48,6 +48,8 @@ import Expression
     '^'       { TokenExponent _ }
     '%'       { TokenModulus _ }
     '=='      { TokenDoubleEquals _ }
+    '>='      { TokenGreaterThanEquals _ }
+    '<='      { TokenLessThanEquals _ }
     '!='      { TokenNotEquals _ }
     and       { TokenAnd _ }
     or        { TokenOr _ }
@@ -55,6 +57,7 @@ import Expression
     '>'       { TokenGreaterThan _ }
     '='       { TokenEquals _ }
     ':'       { TokenCons _ }
+    '!'       { TokenNot _ }
 
     '*'       { TokenStar _ }
     '&'       { TokenAddress _ }
@@ -83,12 +86,12 @@ import Expression
 %right ':'
 %left or
 %left and
-%left '==' '!=' '<' '>'
+%left '==' '!=' '<' '>' '>=' '<='
 %left '+' '-'
 %left '*' '/' '%'
 %left NEG
 %right '^' 
-%right POINT '&'
+%right POINT '&' '!'
 %%
 
 E : E ';' E                                 { Seq $1 $3 }
@@ -117,6 +120,7 @@ E : E ';' E                                 { Seq $1 $3 }
   | O                                       { $1 }
   | C                                       { $1 }
   | L                                       { $1 }
+  | '!' E                                   { BooleanNotExpr $2 }
 
 FT : '(' FTP ')' '->' FT                    { FuncType $2 $5 Nothing }
    | '(' FTP ')' '->' TL                    { FuncType $2 (ExprType $5) Nothing }
@@ -177,6 +181,8 @@ B : '{' E '}'                               { FuncBlock $2 }
 -- Binary operations.
 O : E '==' E                                { Op (CompOp Equality $1 $3) }
   | E '!=' E                                { Op (CompOp NotEquals $1 $3) }
+  | E '>=' E                                { Op (CompOp Or (Op (CompOp GreaterThan $1 $3)) (Op (CompOp Equality $1 $3))) }
+  | E '<=' E                                { Op (CompOp Or (Op (CompOp LessThan $1 $3)) (Op (CompOp Equality $1 $3))) }
   | E ':' E                                 { Op (Cons $1 $3) }
   | E '+' E                                 { Op (MathOp Plus $1 $3) }
   | E '-' E                                 { Op (MathOp Min $1 $3) }
