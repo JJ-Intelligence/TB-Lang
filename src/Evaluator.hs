@@ -11,6 +11,10 @@ import System.IO (isEOF)
 import System.IO (hPutStrLn, stderr)
 import System.Exit (exitFailure)
 import Debug.Trace
+import qualified Control.Exception as Ex
+
+import qualified Data.Time.Clock.POSIX as Time -- DEBUGGING
+getTime = round `fmap` Time.getPOSIXTime -- DEBUGGING
 
 -- Reserved elements of the Store.
 builtInFuncStart = 3 -- Starting address for built in functions in the env/store.
@@ -398,7 +402,8 @@ step (BuiltInFunc "hasElems" [Var n, Var p], env, store, nextAddr, kon) = case v
 
 -- IO Operations:
 step (BuiltInFunc "out" [Var a], env, store, nextAddr, kon) = do
-    putStrLn $ show v
+    --t <- getTime
+    putStrLn $ (show v)-- ++ " : " ++ (show t)
     return (Value VNone, env, store, nextAddr, kon)
         where 
             v = (lookupVar a env store)
@@ -480,7 +485,7 @@ step (Value e2, env', store, nextAddr, (BinOpH (BinCompOp Or (Value e1) env)):ko
 
 -- Comparison <, >, == operations.
 step (Value e1, env', store, nextAddr, (BinOpH (BinCompOp LessThan (Value e2) env)):kon) 
-    | isChildOf [] t1 ([], COrd) && isChildOf [] t2 ([], COrd) && t1 == t2 = step (Value $ VBool $ e1 < e2, env, store, nextAddr, kon)
+    | isChildOf [] t1 ([], COrd) && isChildOf [] t2 ([], COrd) && t1 == t2 = step (Value $ VBool $ e2 < e1, env, store, nextAddr, kon)
     | otherwise = error $ "Type error \n" ++ (show $ Value e1)++"\n"++(show LessThan)++"\n"++(show $ Value e2) ++"\nInteger"
     where
         t1 = getType store e1
@@ -972,12 +977,13 @@ dropStreamInput _ _ _ = error "dropStreamInput function only takes in a VStream 
 
 handleStreamInput :: ExprValue -> Int -> Store -> IO (Either Exception (ExprValue, Store)) -- Update to just take in address!
 handleStreamInput (VStream i _) n store = do
-    let (VStream _ xs) = fromJust $ MapL.lookup (-i) store
+    let (VStream i' xs) = fromJust $ MapL.lookup (-i) store
 
     case length xs >= n of
-        True -> return $ Right (fromJust $ MapL.lookup (-i) store, store)
+        True -> return $ Right (VStream i' xs, store)
         False -> do
             upStr <- updateStreams (n - length xs) store
+            
             case upStr of 
                 (Left ex) -> return $ Left ex
                 (Right store') -> return $ Right (fromJust $ MapL.lookup (-i) store', store')
@@ -988,9 +994,9 @@ updateStreams n store = do
     inp <- readInput [] n
 
     case inp of
-        (Left ex) -> return $ Left ex
+        (Left e) -> return $ Left e
         (Right xss) -> do
-            let ks = case MapL.lookup (inputStreamsToRead) store of
+            let ks = case MapL.lookup inputStreamsToRead store of
                             Just (VList t ks') -> foldr (\(VInt k) acc -> k:acc) [] ks'
                             Nothing -> []
 
@@ -1008,13 +1014,13 @@ updateStreams n store = do
                         False -> return $ Right $ foldl (\store' k -> MapL.update (\(VStream i ys) -> Just (VStream i (ys++(xss!!k)))) (-k) store') store ks
                         True -> return $ Left StreamOutOfInputException
 
-                where helper c store = case MapL.lookup c store of
-                                            Just (VStream i ys) -> helper (c-1) (MapL.update (\x -> Just (VStream i (ys++[VNone]))) c store)
-                                            Nothing -> store
+    where helper c store = case MapL.lookup c store of
+                                Just (VStream i ys) -> helper (c-1) (MapL.update (\x -> Just (VStream i (ys++[VNone]))) c store)
+                                Nothing -> store
 
 -- Read n lines of input into stream buffers (a list of lists).
 readInput :: [[ExprValue]] -> Int -> IO (Either (Exception) [[ExprValue]])
-readInput xss 0 = return $ Right xss
+readInput xss 0 = return $ Right $ map reverse xss
 readInput [] n = do
     end <- isEOF
 
@@ -1022,33 +1028,48 @@ readInput [] n = do
         True -> return $ Right []
         False -> do
             line <- getLine
-            let wline = words line
 
-            case foldr (\b acc -> b && acc) True (map (all (\x -> isDigit x || x=='-')) wline) of
-                False -> return $ Left InvalidInputException
-                True -> do
-                    let line' = foldr (\x acc -> [VInt x]:acc) [] $ map (read :: String -> Int) wline
-                    readInput line' (n-1)
+            case helper (words line) of
+                (Left e) -> return $ Left e
+                (Right xss') -> readInput xss' (n-1)
 
-readInput xss n = do 
+    where
+        helper :: [String] -> Either Exception [[ExprValue]]
+        helper [] = Right []
+        helper (y:ys)
+            | res == [] || (snd $ head res) /= "" = Left InvalidInputException
+            | otherwise = case helper ys of
+                (Left e) -> Left e
+                (Right xss') -> Right $ [VInt $ fst $ head res]:xss'
+            where 
+                res = (reads y) :: [(Int, String)]
+
+readInput xss n = do
     end <- isEOF
 
     case end of
-        True -> return $ Right (helper xss (replicate (length xss) VNone))
+        True -> return $ Right $ foldr (\xs acc -> (xs ++ [VNone]):acc) [] xss
         False -> do
             line <- getLine
-            let wline = words line
+            let res = helper xss (words line)
 
-            case foldr (\b acc -> b && acc) True (map (all (\x -> isDigit x || x=='-')) wline) of
-                False -> return $ Left InvalidInputException
-                True -> do
-                    let line' = map ((\i -> VInt i) . (read :: String -> Int)) wline
-                    case length xss /= length line' of
-                        True -> return $ Left InvalidInputException
-                        False -> readInput (helper xss line') (n-1)
+            case res of
+                (Left e) -> return $ Left e
+                (Right xss') -> readInput xss' (n-1)
 
-        where helper [] [] = []
-              helper (ys:yss) (x:xs) = (ys ++ [x]) : helper yss xs
+    where
+        -- Takes the current [[VInt]] list, processes [String], and adds resulting VInt's to the current list.
+        helper :: [[ExprValue]] -> [String] -> Either Exception [[ExprValue]]
+        helper [] [] = Right $ []
+        helper [] _ = Left InvalidInputException
+        helper _ [] = Left InvalidInputException
+        helper (xs:xss) (y:ys)
+            | res == [] || (snd $ head res) /= "" = Left InvalidInputException
+            | otherwise = case helper xss ys of
+                (Left e) -> Left e
+                (Right xss') -> Right $ ((VInt $ fst $ head res):xs):xss'
+            where
+                res = (reads y) :: [(Int, String)]
 
 -- Generates a function call for throwing an exception s.
 throwException :: String -> Expr
