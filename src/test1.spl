@@ -1,16 +1,19 @@
 
-x = 1;
-
-if (True) {
-    x = True;
-} else {
-    x = [];
+type f (Int) -> Int;
+func f (1) = {
+    x = f(2);
+    return (x);
+};
+func f (2) = {
+    drop(3, []);
+    return (2);
 };
 
--- [1] + [True];
--- out(1);
 
-type f (Int, Bool) -> Int;
-func f (4, True) = 4;
+try {
+    f(3);
+} catch (NonExhaustivePatternException) {
+    out(1);
+};
 
-f(x, True);
+f(1);
