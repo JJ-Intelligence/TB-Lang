@@ -10,6 +10,7 @@ main = do args <- getArgs
           case args of
             [solution] -> do 
                     f <- readFile solution
+                    print "Lexered\n"
                     let xs = parse $ alexScanTokens f
                     print "Parsed: "
                     print xs

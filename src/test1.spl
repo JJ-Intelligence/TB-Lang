@@ -1,0 +1,19 @@
+
+type f (Int) -> Int;
+func f (1) = {
+    x = f(2);
+    return (x);
+};
+func f (2) = {
+    drop(3, []);
+    return (2);
+};
+
+
+try {
+    f(3);
+} catch (NonExhaustivePatternException) {
+    out(1);
+};
+
+f(1);

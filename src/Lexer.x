@@ -24,6 +24,9 @@ tokens :-
     return                              { \p _ -> TokenReturn p }
     for                                 { \p _ -> TokenFor p }
 
+    try                                 { \p _ -> TokenTry p }
+    catch                               { \p _ -> TokenCatch p }
+
     \;                                  { \p _ -> TokenSeq p }
     \(                                  { \p _ -> TokenOpenParen p }
     \)                                  { \p _ -> TokenCloseParen p }
@@ -92,6 +95,9 @@ data Token =  TokenIf                           { pos :: AlexPosn }
             | TokenFuncType                     { pos :: AlexPosn }
             | TokenFuncDef                      { pos :: AlexPosn }
             | TokenReturn                       { pos :: AlexPosn }
+
+            | TokenTry                          { pos :: AlexPosn }
+            | TokenCatch                        { pos :: AlexPosn }
             
             | TokenSeq                          { pos :: AlexPosn }
             | TokenOpenParen                    { pos :: AlexPosn }
@@ -159,6 +165,9 @@ instance Show Token where
     show (TokenFuncType _) = "type "
     show (TokenFuncDef _) = "func "
     show (TokenReturn _) = "return "
+
+    show (TokenTry _) = "try "
+    show (TokenCatch _) = "catch "
 
     show (TokenSeq _) = "; "
     show (TokenOpenParen _) = "( "

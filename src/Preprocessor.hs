@@ -30,16 +30,20 @@ insertBuiltIn local = foldr (\(s,t) acc -> Map.insert s [t] acc) local ls
             ("peekN", TFunc [TInt, TRef $ TIterable $ TGeneric "a"] (TList $ TGeneric "a") []),
             ("isEmpty", TFunc [TRef $ TIterable $ TGeneric "a"] (TBool) []),
             ("hasElems", TFunc [TInt, TRef $ TIterable $ TGeneric "a"] (TBool) []),
-            ("EmptyListException", (TException)),
-            ("IndexOutOfBoundException", (TException)),
-            ("StreamOutOfInputException", (TException))]
+            ("throw", TFunc [TException] (TNone) []),
+            ("EmptyListException", TException),
+            ("IndexOutOfBoundException", TException),
+            ("StreamOutOfInputException", TException),
+            ("InvalidParameterException", TException),
+            ("NonExhaustivePatternException", TException),
+            ("InvalidInputException", TException)]
 
 preprocess :: Expr -> IO ()
 preprocess e = do
     (t, (global, local, (ft, _))) <- process e (Map.empty, insertBuiltIn (Map.empty), ([],[]))
 
     if (ft /= []) then do
-        printStdErr ("ERROR: Unable to return when not in a function: plz guess where the error is")
+        printStdErr ("Return ERROR: Unable to return when not inside a function.")
         exitFailure
     else return ()
 
@@ -59,13 +63,26 @@ process (Literal (EBool b)) (global, local, ft) = return ([TBool], (global, loca
 process (Literal Empty) (global, local, ft) = return ([TList TEmpty], (global, local, ft))
 process (Literal ENone) (global, local, ft) = return ([TNone], (global, local, ft))
 
+process (AddressExpr e1) (global, local, ft) = do
+    (t, (global', local', _)) <- process e1 (global, local, ft)
+
+    if length t /= 1 then do
+            printStdErr ("Type ERROR: In statement \'" ++ (show (AddressExpr e1)) ++ "\'"
+                ++ "\nExpression e1 \'" ++ (show e1) ++ "\' has ambiguous types: " ++ (show $ head t) ++ (foldr (\k acc -> ", " ++ (show k) ++ acc) "" $ tail t))
+            exitFailure
+    else
+        return ()
+
+    return ([TRef $ head t], (global', local', ft))
+
 
 process (Return e1) (global, local, (ft, tc)) = do
     (t, (global', local', _)) <- process e1 (global, local, (ft,tc))
 
     if length t /= 1 then do
-        printStdErr ("ERROR: ambiguous types for: " ++ (show (Return e1)))
-        exitFailure
+            printStdErr ("Type ERROR: In statement \'" ++ (show (Return e1)) ++ "\'"
+                ++ "\nExpression e1 \'" ++ (show e1) ++ "\' has ambiguous types: " ++ (show $ head t) ++ (foldr (\k acc -> ", " ++ (show k) ++ acc) "" $ tail t))
+            exitFailure
     else
         return ()
 
@@ -75,11 +92,9 @@ process (Return e1) (global, local, (ft, tc)) = do
 process (FuncBlock e1) (global, local, (ft, tc)) = do 
     (t, (global', local', (ft', tc'))) <- process e1 (global, local, ([TNone], tc))
 
-    putStrLn ("FuncBlock return types: " ++ (show ft'))
-
-    if length ft' > 1 then do
-        printStdErr ("ERROR: ambiguous types for function block: " ++ (show $ FuncBlock e1) 
-            ++ "\nPossible types are " ++ (show ft'))
+    if length ft' /= 1 then do
+        printStdErr ("Type ERROR: In function block \'" ++ (show (FuncBlock e1)) ++ "\'"
+            ++ "\nReturn types are ambiguous: " ++ (show $ head ft') ++ (foldr (\k acc -> ", " ++ (show k) ++ acc) "" $ tail ft'))
         exitFailure
     else
         return ()
@@ -91,8 +106,8 @@ process (FuncBlock e1) (global, local, (ft, tc)) = do
 process (LocalAssign (DefVar s (FuncType ps out cs))) (global, local, ft) = do
     case (Map.lookup s local) of
         Just ([TFunc ps' out' cs'])  -> do
-            printStdErr ("ERROR: ambiguous types for function \'"++ s ++ "\'.\nIts type is already: " ++ (show (TFunc ps' out' cs')) 
-                ++ "\nBut a second type definition has also been give: " ++ (show (FuncType ps out cs)))
+            printStdErr ("Type ERROR: In function type definition \'" ++ (show $ LocalAssign (DefVar s (FuncType ps out cs))) ++ "\'"
+                ++"\nThe functions type has already been declared as: " ++ (show (TFunc ps' out' cs')))
             exitFailure
 
         _ -> do
@@ -104,21 +119,24 @@ process (LocalAssign (DefVar s (FuncType ps out cs))) (global, local, ft) = do
 process (LocalAssign (DefVar s (Func ps' e1))) (global, local, (ft, tc)) = do
     case (lookupT s (global, local)) of
         Nothing -> do
-            printStdErr ("ERROR: function type for \'" ++ s ++ "\' has not been declared.")
+            printStdErr ("Type ERROR: In function definition \'" ++ (show (LocalAssign (DefVar s (Func ps' e1)))) ++ "\'"
+                ++"\nThe function type for \'" ++ s ++ "\' has not yet been declared")
             exitFailure
 
         Just ([TFunc ps out cs]) -> do
             if (hasDuplicateVarNames ps' []) then do
-                printStdErr ("ERROR: Duplicate variable names in function definition: " ++ (show (DefVar s (Func ps' e1))))
+                printStdErr ("Parameter ERROR: In function definition \'" ++ (show (LocalAssign (DefVar s (Func ps' e1)))) ++ "\'"
+                    ++ "\nDuplicate variable names have been used")
                 exitFailure
             else
                 return ()
 
             case (putFuncParamsInStore cs ps ps' (Map.empty) []) of
                 (Left (es, ts)) -> do
-                    printStdErr ("ERROR: function definition parameters for \'" ++ s ++ "\' doesn't match the functions input type.\n"
-                        ++ (foldr (\(t,e) acc -> "Type \'" ++ (show t) ++ "\' does not match the type of expression \'" ++ (show e) ++ "\'\n"++acc) "" es)
-                        ++ "\n" ++ (foldr (\t acc -> "Type \'" ++ (show t) ++ "\' is not matched in the function definition\n"++acc) "" ts))
+                    printStdErr ("Type ERROR: In function definition \'" ++ (show (LocalAssign (DefVar s (Func ps' e1)))) ++ "\'"
+                        ++ "\nThe function definition's parameters don't match the functions input type:\n"
+                        ++ (foldr (\(t,e) acc -> "Input type \'" ++ (show t) ++ "\' does not match the type of expression \'" ++ (show e) ++ "\'\n"++acc) "" es)
+                        ++ "\n" ++ (foldr (\t acc -> "Input type \'" ++ (show t) ++ "\' is not matched in the function definition\n"++acc) "" ts))
                     exitFailure
 
                 (Right funcLocal) -> do
@@ -127,17 +145,17 @@ process (LocalAssign (DefVar s (Func ps' e1))) (global, local, (ft, tc)) = do
                     (t, (funcGlobal', funcLocal', _)) <- process e1 (funcGlobal, funcLocal, ([], cs))
 
                     if length t /= 1 then do
-                        printStdErr ("ERROR: ambiguous return types for function \'" ++ (show s) ++ "\'.\n"
-                            ++ "The return type should be: " ++ (show out) ++ " ~ " ++ (show cs) ++"\n" 
-                            ++ "But the declared return types are: " ++ (show $ head t) ++ (foldr (\t' acc -> ", " ++ (show t') ++ acc) "" (tail t)))
+                        printStdErr ("Type ERROR: In function definition \'" ++ (show (LocalAssign (DefVar s (Func ps' e1)))) ++ "\'"
+                            ++ "\nFunction definition has ambiguous return types: " ++ (show $ head t) ++ (foldr (\t' acc -> ", " ++ (show t') ++ acc) "" (tail t))
+                            ++ "\nBut the return type should be: " ++ (show out) ++ " ~ " ++ (show cs))
                         exitFailure
                     else
                         return ()
 
                     if not (compareTypes cs out (head t)) then do
-                        printStdErr ("ERROR: function definition for \'" ++ s ++ "\' doesn't match the functions return type.\n"
-                            ++ "The function return type is: " ++ (show out) ++ " ~ " ++ (show cs) ++"\n" 
-                            ++ "But the declared return type is: " ++ (show $ head t))
+                        printStdErr ("Type ERROR: In function definition \'" ++ (show (LocalAssign (DefVar s (Func ps' e1)))) ++ "\'"
+                            ++ "\nFunction definition has a return type of:" ++ (show out) ++ " ~ " ++ (show cs)
+                            ++ "\nBut the return type should be: " ++ (show $ head t) ++ " ~ " ++ (show cs))
                         exitFailure
                     else
                         return ()
@@ -147,7 +165,8 @@ process (LocalAssign (DefVar s (Func ps' e1))) (global, local, (ft, tc)) = do
                         else ([(TFunc ps out cs)], (funcGlobal', local, (ft, tc)))
 
         _ -> do
-            printStdErr ("ERROR: \'" ++ s ++ "\' is not a function.")
+            printStdErr ("Access ERROR: In function definition \'" ++ (show (LocalAssign (DefVar s (Func ps' e1)))) ++ "\'"
+                ++ "\n" ++ s ++ " is a variable, not a function")
             exitFailure
 
     where 
@@ -167,9 +186,10 @@ process (LocalAssign (DefVar s (Func ps' e1))) (global, local, (ft, tc)) = do
 process (LocalAssign (DefVar s e1)) (global, local, ft) = do
     (t', (global', local', ft')) <- process e1 (global, local, ft)
     let lv = (lookupT s (global, local))
-    if lv /= Nothing && (length (fromJust lv) /= 1 || (fromJust lv) /= t')
-        then printStdErr ("WARNING: ambiguous types for: " ++ (show s) ++ " in " ++ (show (LocalAssign (DefVar s e1))))
-        else return ()
+    -- if lv /= Nothing && (length (fromJust lv) /= 1 || (fromJust lv) /= t') then 
+    --     printStdErr ("WARNING: ambiguous types for: " ++ (show s) ++ " in " ++ (show (LocalAssign (DefVar s e1))))
+    -- else 
+    --     return ()
     return (t', (global', Map.insert s t' local', ft'))
 
 
@@ -177,24 +197,54 @@ process (Var s) state@(global, local, ft) = do
     let t = (lookupT s (global, local))
     if t == Nothing
         then do
-            printStdErr ("ERROR: variable referenced before assignment: " ++ (show s))
+            printStdErr ("Access ERROR: In variable access \'" ++ (show (Var s)) ++ "\'"
+                ++ "\nVariable " ++ s ++ "has not been declared yet")
             exitFailure
         else return ()
     return ((fromJust t), state)
+
+process (TryCatch e1 ps e2) (global, local, ft) = do
+    foldr (\e acc -> do
+            (t', (global', local', ft')) <- process e (global, local, ft)
+
+            if length t' /= 1 || head t' /= TException then do
+                printStdErr ("Type ERROR: In try-catch block \'"++(show $ TryCatch e1 ps e2)++"\'"
+                    ++ "\nIn catch block parameters, value \'" ++ (show e) ++ "\'"
+                    ++ (if length t' /= 1 then " has ambiguous types: " ++ (show $ head t') ++ (foldr (\k acc -> ", " ++ (show k) ++ acc) "" $ tail t') else " has type " ++ (show $ head t'))
+                    ++ "\nBut all catch block parameters should have type Exception")
+                exitFailure
+            else
+                return ()
+
+            acc' <- acc
+            return (acc'+1)
+        ) (return 0) (paramsToList ps)
+
+    (t', (global', local', ft')) <- process e1 (global, local, ft)
+    (t', (global', local', ft')) <- process e2 (global, local, ft)
+    return ([TNone], (global', local', ft'))
+
+
+    where
+        paramsToList :: Parameters -> [Expr]
+        paramsToList FuncParamEnd = []
+        paramsToList (FuncParam e1 e2) = e1 : paramsToList e2 
 
 
 process (FuncCall s ps) (global, local, (ft, cs)) = do
     case lookupT s (global, local) of
         Nothing -> do
-            printStdErr ("ERROR: function \'"++s++"\' has not been declared")
+            printStdErr ("Access ERROR: In function call \'"++(show $ FuncCall s ps)++"\'"
+                ++ "\nFunction " ++ s ++ " has not been declared")
             exitFailure
 
         Just ([TFunc ps' out ts]) -> do
             (ms, (global', local')) <- matchParamsToType ts (global, local, cs) ps' ps []
 
             if ms /= Nothing then do
-                printStdErr ("ERROR: function call parameter type mis-match.\n" 
-                    ++ (foldr (\(t, (e, t')) acc -> "Type " ++ (show t) ++ " doesn't match the type of parameter \'"++(show e)++"\' ("++(show t')++")"++acc) "" (fromJust ms)))
+                printStdErr ("Type ERROR: In function call \'"++(show $ FuncCall s ps)++"\'"
+                    ++ "\nDeclared input types don't match the types of the function calls parameters:"
+                    ++ (foldr (\(t, (e, t')) acc -> "Type \'" ++ (show t) ++ " ~ " ++ (show ts) ++ "\' doesn't match the type of parameter \'"++(show e)++"\' ("++(show t')++")"++acc) "" (fromJust ms)))
                 exitFailure
             else
                 return ()
@@ -208,7 +258,8 @@ process (FuncCall s ps) (global, local, (ft, cs)) = do
 
                     case length xs < 1 of
                         True -> do
-                            printStdErr ("WARNNG: return type generic is not in function parameters, so cannot be inferred.")
+                            printStdErr ("Type WARNNG: In function call \'"++(show $ FuncCall s ps)++"\'"
+                                ++ "\nThe functions return type is a generic which is not in the function calls parameters, so cannot be inferred")
                             return ([out], (global', local', (ft, cs)))
 
                         False -> do
@@ -222,25 +273,25 @@ process (FuncCall s ps) (global, local, (ft, cs)) = do
                             case (length (Set.fromList zs)) == 1 of
                                 False -> do
                                     let ts = Set.toList (Set.fromList zs)
-                                    printStdErr ("ERROR: In function call parameters: \'"++(show $ FuncCall s ps)++"\'."
-                                        ++"\nMultiple different types are provided for generic \'" ++ g' ++ "\': " ++ (show $ head ts)++ (foldr (\t acc -> ", " ++ (show t) ++ acc) "" (tail ts)))
+                                    printStdErr ("Type ERROR: In function call \'"++(show $ FuncCall s ps)++"\'"
+                                        ++"\nMultiple types are provided for generic \'" ++ g' ++ "\' in the function calls parameters: " ++ (show $ head ts) ++ (foldr (\t acc -> ", " ++ (show t) ++ acc) "" (tail ts)))
                                     exitFailure
 
                                 True -> do
                                     let rt = subTypeIntoGeneric g' (head zs) out
 
                                     if rt == TConflict then do
-                                        printStdErr ("ERROR: Unable to infer return type form generic and parameter input.")
+                                        printStdErr ("Type ERROR: In function call \'"++(show $ FuncCall s ps)++"\'"
+                                            ++ "\nUnable to infer the generic return type of the function")
                                         exitFailure
                                     else
                                         return ()
 
-                                    putStrLn $ "Function call return type: " ++ (show rt)
-
                                     return ([rt], (global', local', (ft, cs)))
 
         Just _ -> do
-            printStdErr ("ERROR: \'" ++ (show s) ++ "\' is not a function.")
+            printStdErr ("Access ERROR: In function call \'" ++ (show (FuncCall s ps)) ++ "\'"
+                ++ "\n" ++ s ++ " is a variable, not a function")
             exitFailure
 
     where
@@ -252,7 +303,9 @@ process (FuncCall s ps) (global, local, (ft, cs)) = do
             (t', (global', local', ft')) <- process e1 (global, local, ([], cs))
 
             if length t' /= 1 then do
-                printStdErr ("ERROR: parameter has multiple types in: \'" ++ (show e1) ++ "\'\nDiscovered types include: " ++ (show t'))
+                printStdErr ("Type ERROR: In function call \'" ++ (show (FuncCall s ps)) ++ "\'"
+                    ++ "\nParameter \'" ++ (show e1) ++  "\' has ambiguous types: " ++ (show $ head t') ++ (foldr (\k acc -> ", " ++ (show k) ++ acc) "" $ tail t')
+                    ++ "\nIts type should be: " ++ (show t) ++ " ~ " ++ (show tc))
                 exitFailure
             else
                 return ()
@@ -286,7 +339,9 @@ process (FuncCall s ps) (global, local, (ft, cs)) = do
         getGenericTypes (t:tp) (t':ta) = do
             case getGenType t t' of
                 TConflict -> do
-                    printStdErr ("ERROR: Type param doesn't match type of argument.")
+                    printStdErr ("Type ERROR: In function call \'" ++ (show (FuncCall s ps)) ++ "\'"
+                        ++ "\nA parameter has type: " ++ (show t')
+                        ++ "\nBut its type should be: " ++ (show t))
                     exitFailure
                 t -> do
                     ts <- getGenericTypes tp ta
@@ -320,19 +375,26 @@ process (FuncCall s ps) (global, local, (ft, cs)) = do
 process (Op (Cons e1 e2)) (global, local, ft) = do
     (t1, (global1, local1, ft1)) <- process e1 (global, local, ft)
     (t2, (global2, local2, ft2)) <- process e2 (global1, local1, ft1)
-    if (length t1 /= 1 || length t2 /= 1)
-        then do
-            printStdErr ("ERROR: Ambiguous types for: "++(show (Op (Cons e1 e2)))) -- Conflicting types error
-            exitFailure
-        else return()
+
+    if length t1 /= 1 || length t2 /= 1 then do
+        printStdErr ("Type ERROR: In operation \'" ++ (show (Op (Cons e1 e2))) ++ "\'"
+            ++ (if length t1 /= 1 then "\nExpression e1 \'" ++ (show e1) ++ "\' has ambiguous types: " ++ (show $ head t1) ++ (foldr (\k acc -> ", " ++ (show k) ++ acc) "" $ tail t1) else "")
+            ++ (if length t2 /= 1 then "\nExpression e2 \'" ++ (show e2) ++ "\' has ambiguous types: " ++ (show $ head t2) ++ (foldr (\k acc -> ", " ++ (show k) ++ acc) "" $ tail t2) else ""))
+        exitFailure
+    else
+        return()
+
 
     let t' = consTypes (head t1) (head t2)
 
-    if (t' == TConflict)
-        then do
-            printStdErr ("ERROR: conflicting types for op: "++(show (Op (Cons e1 e2)))) -- Conflicting types error
-            exitFailure
-        else return()
+    if (t' == TConflict) then do
+        printStdErr ("Type ERROR: In operation \'" ++ (show (Op (Cons e1 e2))) ++ "\'" 
+            ++ "\nExpression e1 \'" ++ (show e1) ++ "\' has type: " ++ (show $ head t1)
+            ++ "\nExpression e2 \'" ++ (show e2) ++ "\' has type: " ++ (show $ head t2)
+            ++ (if isList $ head t2 then let (TList t) = head t2 in "\nBut e1 should have type " ++ (show t) else "But e2 should have type List"))
+        exitFailure
+    else 
+        return()
 
     return ([t'], (global2, local2, ft2)) -- Is this right?
 
@@ -353,87 +415,86 @@ process (Op (Cons e1 e2)) (global, local, ft) = do
 
         consTypes _ _ = TConflict
 
+        isList (TList _) = True
+        isList _ = False
+
 
 process (Op (MathOp Plus e1 e2)) (global, local, ft) = do
     (t1, (global1, local1, ft1)) <- process e1 (global, local, ft)
     (t2, (global2, local2, ft2)) <- process e2 (global1, local1, ft1)
-    printStdErr ("T1:" ++ (show t1))
-    printStdErr ("T2:" ++ (show t2))
 
-    case length t1 == 1 of
+    case length t1 == 1 && length t2 == 1 of
         True  -> do
-            case head t1 of
-                TInt    -> do
-                    case head t2 of
-                        TInt -> return ([TInt], (global2, local2, ft2))
-                        _    -> do
-                            printStdErr ("ERROR: conflicting types for op: "++(show (Op (MathOp Plus e1 e2)))) -- Conflicting types error
+            case (head t1, head t2) of
+                (TInt, TInt) -> return ([TInt], (global2, local2, ft2))
+
+                (TList t, TList t') -> do
+                    case joinListTypes (TList t) (TList t') of
+                        TConflict -> do
+                            printStdErr ("Type ERROR: In operation \'" ++ (show (Op (MathOp Plus e1 e2))) ++ "\'" 
+                                ++ "\nExpression e1 \'" ++ (show e1) ++ "\' has type: " ++ (show $ TList t)
+                                ++ "\nExpression e2 \'" ++ (show e2) ++ "\' has type: " ++ (show $ TList t')
+                                ++ "\nBut both expressions should have the same List types")
                             exitFailure
+                        newT -> return([newT], (global2, local2, ft2))
 
-                TList t -> do
-                    case head t2 of
-                        TList t' -> do
-                            case joinListTypes (TList t) (TList t') of
-                                TConflict -> do
-                                    printStdErr ("ERROR: conflicting types for op: "++(show (Op (MathOp Plus e1 e2)))) -- Conflicting types error
-                                    exitFailure
-
-                                newT -> return([newT], (global2, local2, ft2))
-
+                    where
+                        joinListTypes TInt TInt = TInt
+                        joinListTypes TBool TBool = TBool
+                        joinListTypes t TEmpty = t
+                        joinListTypes TEmpty t = t
+                        joinListTypes TNone TNone = TNone
+                        joinListTypes (TRef t) (TRef t')
+                            | newT /= TConflict = TRef newT
+                            | otherwise = TConflict
                             where
-                                joinListTypes TInt TInt = TInt
-                                joinListTypes TBool TBool = TBool
-                                joinListTypes t TEmpty = t
-                                joinListTypes TEmpty t = t
-                                joinListTypes TNone TNone = TNone
-                                joinListTypes (TRef t) (TRef t')
-                                    | newT /= TConflict = TRef newT
-                                    | otherwise = TConflict
-                                    where
-                                        newT = joinListTypes t t'
+                                newT = joinListTypes t t'
 
-                                joinListTypes (TList t) (TList t')
-                                    | newT /= TConflict = TList newT
-                                    | otherwise = TConflict
-                                    where
-                                        newT = joinListTypes t t'
+                        joinListTypes (TList t) (TList t')
+                            | newT /= TConflict = TList newT
+                            | otherwise = TConflict
+                            where
+                                newT = joinListTypes t t'
 
-                                joinListTypes _ _ = TConflict
+                        joinListTypes _ _ = TConflict
 
-                        _        -> do
-                            printStdErr ("ERROR: conflicting types for op: "++(show (Op (MathOp Plus e1 e2)))) -- Conflicting types error
-                            exitFailure
-                _       -> do
-                    printStdErr ("ERROR: conflicting types for op: "++(show (Op (MathOp Plus e1 e2)))) -- Conflicting types error
+                (k1, k2) -> do
+                    printStdErr ("Type ERROR: In operation \'" ++ (show (Op (MathOp Plus e1 e2))) ++ "\'" 
+                        ++ "\nExpression e1 \'" ++ (show e1) ++ "\' has type: " ++ (show k1)
+                        ++ "\nExpression e2 \'" ++ (show e2) ++ "\' has type: " ++ (show k2)
+                        ++ "\nBut both expressions should have either Int types, or List types")
                     exitFailure
 
-        False -> do
-            printStdErr ("ERROR: conflicting types for op: "++(show (Op (MathOp Plus e1 e2)))) -- Conflicting types error
+        False -> do -- Conflicting types error (e1)
+            printStdErr ("Type ERROR: In operation \'" ++ (show (Op (MathOp Plus e1 e2))) ++ "\'"
+                ++ (if length t1 /= 1 then "\nExpression e1 \'" ++ (show e1) ++ "\' has ambiguous types: " ++ (show $ head t1) ++ (foldr (\k acc -> ", " ++ (show k) ++ acc) "" $ tail t1) else "")
+                ++ (if length t2 /= 1 then "\nExpression e2 \'" ++ (show e2) ++ "\' has ambiguous types: " ++ (show $ head t2) ++ (foldr (\k acc -> ", " ++ (show k) ++ acc) "" $ tail t2) else "")
+                ++ "\nBut expressions should have type Int or List")
             exitFailure
+
 
 
 process (Op (MathOp op e1 e2)) (global, local, ft) = do
     (t1, (global1, local1, ft1)) <- process e1 (global, local, ft)
     (t2, (global2, local2, ft2)) <- process e2 (global1, local1, ft1)
 
-    if length t1 /= 1 || length t2 /= 1
-        then do
-            printStdErr ("ERROR: ambiguous types for: "++(show (Op (MathOp op e1 e2))))
-            exitFailure
-        else
-            return()
+    if length t1 /= 1 || length t2 /= 1 then do
+        printStdErr ("Type ERROR: In operation \'" ++ (show (Op (MathOp op e1 e2))) ++ "\'"
+            ++ (if length t1 /= 1 then "\nExpression e1 \'" ++ (show e1) ++ "\' has ambiguous types: " ++ (show $ head t1) ++ (foldr (\k acc -> ", " ++ (show k) ++ acc) "" $ tail t1) else "")
+            ++ (if length t2 /= 1 then "\nExpression e2 \'" ++ (show e2) ++ "\' has ambiguous types: " ++ (show $ head t2) ++ (foldr (\k acc -> ", " ++ (show k) ++ acc) "" $ tail t2) else "")
+            ++ "\nBut expressions should have type Int")
+        exitFailure
+    else
+        return()
 
-    if t1!!0 /= TInt
-        then do
-            printStdErr ("ERROR: type invalid for op: "++(show (Op (MathOp op e1 e2))))
-            exitFailure
-        else return ()
-
-    if t2!!0 /= TInt
-        then do
-            printStdErr ("ERROR: type invalid for op: "++(show (Op (MathOp op e1 e2))))
-            exitFailure
-        else return ()
+    if head t1 /= TInt || head t2 /= TInt then do
+        printStdErr ("Type ERROR: In operation \'" ++ (show (Op (MathOp op e1 e2))) ++ "\'" 
+            ++ "\nExpression e1 \'" ++ (show e1) ++ "\' has type: " ++ (show $ head t1)
+            ++ "\nExpression e2 \'" ++ (show e2) ++ "\' has type: " ++ (show $ head t2)
+            ++ "\nBut both expressions should have Int types")
+        exitFailure
+    else
+        return ()
 
     return ([TInt], (global2, local2, ft2))
 
@@ -441,45 +502,49 @@ process (Op (MathOp op e1 e2)) (global, local, ft) = do
 process (Op (CompOp op e1 e2)) (global, local, (ft, tc)) = do
     (t1, (global1, local1, ft1)) <- process e1 (global, local, (ft, tc))
     (t2, (global2, local2, ft2)) <- process e2 (global1, local1, ft1)
-    if length t1 /= 1 || length t2 /= 1
-        then do
-            printStdErr ("ERROR: ambiguous types for: "++(show (Op (CompOp op e1 e2))))
-            exitFailure
-        else
-            return()
+
+    if length t1 /= 1 || length t2 /= 1 then do
+        printStdErr ("Type ERROR: In operation \'" ++ (show (Op (CompOp op e1 e2))) ++ "\'"
+            ++ (if length t1 /= 1 then "\nExpression e1 \'" ++ (show e1) ++ "\' has ambiguous types: " ++ (show $ head t1) ++ (foldr (\k acc -> ", " ++ (show k) ++ acc) "" $ tail t1) else "")
+            ++ (if length t2 /= 1 then "\nExpression e2 \'" ++ (show e2) ++ "\' has ambiguous types: " ++ (show $ head t2) ++ (foldr (\k acc -> ", " ++ (show k) ++ acc) "" $ tail t2) else "")
+            ++ "\nBut expressions should have type Int")
+        exitFailure
+    else
+        return()
+
     case op == And || op == Or of
         True -> do -- &&, || operations
-            if (head t1) /= TBool || (head t2) /= TBool
-                then do
-                    printStdErr ("ERROR: type invalid for op \'"++(show op)++"\' in \'" ++ (show (Op (CompOp op e1 e2))) ++ "\'"
-                        ++ "\nType of e1 is: " ++ (show $ head t1)
-                        ++ "\nType of e2 is: " ++ (show $ head t2)
-                        ++ "\nHowever, both should have type Boolean.")
-                    exitFailure
-                else return ()
+            if (head t1) /= TBool || (head t2) /= TBool then do
+                printStdErr ("Type ERROR: In operation \'" ++ (show (Op (CompOp op e1 e2))) ++ "\'"
+                    ++ "\nExpression e1 \'"++ (show e1) ++"\'' has type: " ++ (show $ head t1)
+                    ++ "\nExpression e2 \'"++ (show e2) ++"\'' has type: " ++ (show $ head t2)
+                    ++ "\nBut both expressions should have type Boolean")
+                exitFailure
+            else 
+                return ()
 
         False -> do
             case op == Equality || op == NotEquals of -- TODO add NOT equals and NOT
                 True -> do -- == operation
-                    if isChildOf tc (head t1) ([], CEq) && isChildOf tc (head t2) ([], CEq) && compareTypes tc (head t1) (head t2)
-                        then return ()
-                        else do
-                            printStdErr ("ERROR: type invalid for op \'"++(show op)++"\' in \'" ++ (show (Op (CompOp op e1 e2))) ++ "\'"
-                                ++ "\nType of e1 is: " ++ (show $ head t1)
-                                ++ "\nType of e2 is: " ++ (show $ head t2)
-                                ++ "\nHowever, both should have type Boolean.")
-                            exitFailure
+                    if isChildOf tc (head t1) ([], CEq) && isChildOf tc (head t2) ([], CEq) && compareTypes tc (head t1) (head t2) then 
+                        return ()
+                    else do
+                        printStdErr ("Type ERROR: In operation \'" ++ (show (Op (CompOp op e1 e2))) ++ "\'"
+                            ++ "\nExpression e1 \'"++ (show e1) ++"\'' has type: " ++ (show $ head t1)
+                            ++ "\nExpression e2 \'"++ (show e2) ++"\'' has type: " ++ (show $ head t2)
+                            ++ "\nBut both expressions should be children of the Eq type class")
+                        exitFailure
 
                 False -> do -- <, > operations
-                    if isChildOf tc (head t1) ([], COrd) && isChildOf tc (head t2) ([], COrd) && compareTypes tc (head t1) (head t2)
-                        then return ()
-                        else do
-                            printStdErr ("ERROR: type invalid for op \'"++(show op)++"\' in \'" ++ (show (Op (CompOp op e1 e2))) ++ "\'"
-                                ++ "\nType of e1 is: " ++ (show $ head t1)
-                                ++ "\nType of e2 is: " ++ (show $ head t2)
-                                ++ "\nHowever, both should have type Boolean."
-                                ++ "\nErrors: " ++ (show $ isChildOf tc (head t1) ([], COrd)) ++ " | " ++ (show $ isChildOf tc (head t2) ([], COrd)) ++ " | " ++ (show $ compareTypes tc (head t1) (head t2)))
-                            exitFailure
+                    if isChildOf tc (head t1) ([], COrd) && isChildOf tc (head t2) ([], COrd) && compareTypes tc (head t1) (head t2) then 
+                        return ()
+                    else do
+                        printStdErr ("Type ERROR: In operation \'" ++ (show (Op (CompOp op e1 e2))) ++ "\'"
+                            ++ "\nExpression e1 \'"++ (show e1) ++"\'' has type: " ++ (show $ head t1)
+                            ++ "\nExpression e2 \'"++ (show e2) ++"\'' has type: " ++ (show $ head t2)
+                            ++ "\nBut both expressions should be children of the Ord type class")
+                        exitFailure
+
     return ([TBool], (global2, local2, ft2))
 
 
@@ -487,9 +552,15 @@ process (If c e1 e2) (global, local, ft) = do
     (tc, (global', local', ft')) <- process c (global, local, ft)
 
     if length tc /= 1 || (head tc) /= TBool then do
-        printStdErr ("ERROR: expected boolean: "++(show (If c e1 e2)))
+        printStdErr ("Type ERROR: In statement \'" ++ (show (If c e1 e2)) ++ "\'" ++
+            (if length tc /= 1 then 
+                "\nThe condition \'" ++ (show c) ++ "\' has ambiguous types: " ++ (show $ head tc) ++ (foldr (\k acc -> ", " ++ (show k) ++ acc) "" $ tail tc) 
+            else 
+                "\nThe condition \'"++ (show c) ++ "\'' has type: " ++ (show $ head tc))
+            ++ "\nBut it should have type Boolean")
         exitFailure
-    else return ()
+    else 
+        return ()
 
     (t1, (global_, local_, ft1)) <- process e1 (global', local', ft')
     let (global1, local1) = unionStates (global_, local_) (global', local')
@@ -512,9 +583,15 @@ process (While c e1) (global, local, ft) = do
     (ts, (global1, local1, ft1)) <- process c (global, local, ft)
 
     if length ts /= 1 || (head ts) /= TBool then do
-        printStdErr ("ERROR: expected boolean in while loop condition: " ++ (show (While c e1)))
+        printStdErr ("Type ERROR: In statement \'" ++ (show (While c e1)) ++ "\'" ++
+            (if length ts /= 1 then 
+                "\nThe condition \'" ++ (show c) ++ "\' has ambiguous types: " ++ (show $ head ts) ++ (foldr (\k acc -> ", " ++ (show k) ++ acc) "" $ tail ts) 
+            else 
+                "\nThe condition \'"++ (show c) ++ "\'' has type: " ++ (show $ head ts))
+            ++ "\nBut it should have type Boolean")
         exitFailure
-    else return ()
+    else 
+        return ()
 
     (t1, (global2, local2, ft2)) <- process e1 (global1, local1, ft1)
     -- let (global3, local3) = unionStates (global1, local1) (global2, local2) -- Don't think we need this union?
@@ -524,8 +601,13 @@ process (For i c n e) (global, local, ft) = do
     (ts1, (global1, local1, ft1)) <- process i (global, local, ft)
     (ts2, (global2, local2, ft2)) <- process c (global1, local1, ft1)
 
-    if length ts2 /= 1 || (head ts2) /= TBool then do
-        printStdErr ("ERROR: expected boolean in for loop condition: " ++ (show c))
+    if length ts2 /= 1 || head ts2 /= TBool then do
+        printStdErr ("Type ERROR: In statement \'" ++ (show (For i c n e)) ++ "\'" ++
+            (if length ts2 /= 1 then 
+                "\nThe condition \'" ++ (show c) ++ "\' has ambiguous types: " ++ (show $ head ts2) ++ (foldr (\k acc -> ", " ++ (show k) ++ acc) "" $ tail ts2) 
+            else 
+                "\nThe condition \'"++ (show c) ++ "\'' has type: " ++ (show $ head ts2))
+            ++ "\nBut it should have type Boolean")
         exitFailure
     else 
         return ()
@@ -600,8 +682,3 @@ lookupT name (global, local)
     where
         lLookup = Map.lookup name local
         gLookup = Map.lookup name global
-
-printStdErr :: String -> IO ()
-printStdErr s = do
-    hPutStrLn stderr s
-    return ()
