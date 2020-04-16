@@ -63,6 +63,18 @@ process (Literal (EBool b)) (global, local, ft) = return ([TBool], (global, loca
 process (Literal Empty) (global, local, ft) = return ([TList TEmpty], (global, local, ft))
 process (Literal ENone) (global, local, ft) = return ([TNone], (global, local, ft))
 
+process (AddressExpr e1) (global, local, ft) = do
+    (t, (global', local', _)) <- process e1 (global, local, ft)
+
+    if length t /= 1 then do
+            printStdErr ("Type ERROR: In statement \'" ++ (show (AddressExpr e1)) ++ "\'"
+                ++ "\nExpression e1 \'" ++ (show e1) ++ "\' has ambiguous types: " ++ (show $ head t) ++ (foldr (\k acc -> ", " ++ (show k) ++ acc) "" $ tail t))
+            exitFailure
+    else
+        return ()
+
+    return ([TRef $ head t], (global', local', ft))
+
 
 process (Return e1) (global, local, (ft, tc)) = do
     (t, (global', local', _)) <- process e1 (global, local, (ft,tc))

@@ -392,7 +392,7 @@ step (BuiltInFunc "hasElems" [Var n, Var p], env, store, nextAddr, kon) = case v
         Just (VStream i xs) -> do
             peekInp <- peekStreamInput (VStream i xs) n' store
             case peekInp of
-                (Left ex) -> step (throwException (show ex), env, store, nextAddr, kon)
+                (Left ex) -> trace ("hasElems exception") $ step (throwException (show ex), env, store, nextAddr, kon)
                 (Right (ys, store')) -> return (Value $ VBool (length ys >= n' && not (VNone `elem` ys)), env, store', nextAddr, kon)
 
     where 
@@ -991,7 +991,7 @@ handleStreamInput (VStream i _) n store = do
 -- Input function. Reads in n values from a given sequence.
 updateStreams :: Int -> Store -> IO (Either Exception Store)
 updateStreams n store = do
-    inp <- readInput [] n
+    inp <- readInput [] (if n > 100 then n else 100)
 
     case inp of
         (Left e) -> return $ Left e
@@ -1048,7 +1048,7 @@ readInput xss n = do
     end <- isEOF
 
     case end of
-        True -> return $ Right $ foldr (\xs acc -> (xs ++ [VNone]):acc) [] xss
+        True -> return $ Right $ map (reverse . (VNone:)) xss
         False -> do
             line <- getLine
             let res = helper xss (words line)
