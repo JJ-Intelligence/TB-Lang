@@ -6,13 +6,11 @@ import qualified Data.Map.Strict as Map
 import qualified Data.IntMap.Lazy as MapL
 import Data.Maybe
 import Data.List
-import Data.Char
 import System.IO (isEOF)
 import System.IO (hPutStrLn, stderr)
 import System.Exit (exitFailure)
-import Debug.Trace
-import qualified Control.Exception as Ex
 
+import Debug.Trace
 import qualified Data.Time.Clock.POSIX as Time -- DEBUGGING
 getTime = round `fmap` Time.getPOSIXTime -- DEBUGGING
 
@@ -224,7 +222,7 @@ step (FuncCall s ps, env, store, nextAddr, callS, kon) = do
                 (Left ex) -> step (throwException (show ex), env, store, nextAddr, newCallS, kon)
                 (Right (e1, env'', nextAddr'')) -> do
                     (Value e2, _, store''', _, _, funcKon) <- step (e1, env'', store'', nextAddr'', newCallS, ReturnFrame:[Done]) -- Recurse into function call.
-                        
+
                     case head funcKon of
                         (ThrownException ex exCallS) -> popCaseOf ex exCallS
                         _ -> step (Value e2, env', store''', nextAddr', callS, kon) -- Continue after function call returns.
@@ -254,7 +252,6 @@ step (FuncCall s ps, env, store, nextAddr, callS, kon) = do
         evaluateArgs FuncParamEnd env store nextAddr callS ls = return $ Right (ls, env, store, nextAddr)
         evaluateArgs (FuncParam e1 e2) env store nextAddr callS ls = do
             (Value e1', env', store', nextAddr', exCallS, kon') <- step (e1, env, store, nextAddr, callS, [Done])
-
             case head kon' of
                 f@(ThrownException ex exCallS) -> return $ Left f
                 _ -> evaluateArgs e2 env' store' nextAddr' callS (ls ++ [e1'])
@@ -1020,16 +1017,16 @@ updateStreams n store = do
                         False -> return $ Right $ foldl (\store' k -> MapL.update (\(VStream i ys) -> Just (VStream i (ys++(xss!!k)))) (-k) store') store ks
                         True -> return $ Left StreamOutOfInputException
 
-    where helper c store = case MapL.lookup c store of
-                                Just (VStream i ys) -> helper (c-1) (MapL.update (\x -> Just (VStream i (ys++[VNone]))) c store)
-                                Nothing -> store
+    where 
+        helper c store = case MapL.lookup c store of
+            Just (VStream i ys) -> helper (c-1) (MapL.update (\x -> Just (VStream i (ys++[VNone]))) c store)
+            Nothing -> store
 
 -- Read n lines of input into stream buffers (a list of lists).
 readInput :: [[ExprValue]] -> Int -> IO (Either (Exception) [[ExprValue]])
 readInput xss 0 = return $ Right $ map reverse xss
 readInput [] n = do
     end <- isEOF
-
     case end of 
         True -> return $ Right []
         False -> do
@@ -1052,7 +1049,6 @@ readInput [] n = do
 
 readInput xss n = do
     end <- isEOF
-
     case end of
         True -> return $ Right $ map (reverse . (VNone:)) xss
         False -> do
