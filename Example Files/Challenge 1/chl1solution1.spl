@@ -13,6 +13,8 @@ if (isEmpty(as) == False) {
     out(pop(as));
 };
 
+out(pop(as));
+
 -- Challenge 1, solution 1
 -- type solve ((Itr Int)*, (Itr Int)*) -> NoneType;
 -- func solve (*[], *bs) = None;
@@ -25,17 +27,3 @@ if (isEmpty(as) == False) {
 -- setIn([0,1]);
 
 -- solve(in(0), in(1));
-
-
-type solve ((Itr a)*) -> a ~ (Eq a)
-func solve (*(a:[])) = a;
-func solve (*(a:b:cs)) = {
-    if (a == b) {
-        x = a;
-    } else {
-        x = solve(cs);
-    };
-
-    return (x);
-};
-
