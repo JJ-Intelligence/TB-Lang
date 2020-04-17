@@ -13,6 +13,7 @@ if (isEmpty(as) == False) {
     out(pop(as));
 };
 
+/* heyll func */
 -- Challenge 1, solution 1
 -- type solve ((Itr Int)*, (Itr Int)*) -> NoneType;
 -- func solve (*[], *bs) = None;

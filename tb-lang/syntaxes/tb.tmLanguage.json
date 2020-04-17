@@ -4,6 +4,9 @@
 	"name": "TB",
 	"patterns": [
 		{
+			"include": "#types"
+		},
+		{
 			"include": "#operator"
 		},
 		{
@@ -20,45 +23,59 @@
 		}
 	],
 	"repository": {
+		"types" : {
+			"patterns": [
+				{
+					"name": "support.types",
+					"match": "\\b(Int|Bool|(Itr|Eq|Ord) [A-Z|a-z|_]+|\\~|NoneType)"
+				}
+			]
+		},
 		"operator": {
 		  	"patterns": [{
 				"name": "keyword.other",
-				"match": "\\+|\\-|\\*"
+				"match": "\\+|\\-|\\*|\\%|\\/|\\&|\\:"
 			}]
 		},
 		"keywords": {
 			"patterns": [{
 				"name": "keyword.control.tb",
-				"match": "\\b(if|while|for|return|func|elif|else)\\b"
+				"match": "\\b(if|while|for|return|func|elif|else|type)\\b"
 			}]
 		},
 		"comments": {
 		  	"patterns": [{
-				"name": "comment.line.double-dash",
+				"name": "comment.line",
 				"match": "-- .*"
+			},
+			{
+				"name": "comment.block",
+				"match": "/\\*.*\\*/"
 			}]
 		},
 		"constants": {
-		  	"patterns": [{
-				"name": "constant.numeric",
-				"match": "\\b[0-9]+\\b"
-			},
-			{
-				"name": "constant.language",
-				"match": "True|False|None"
-			}]
+		  	"patterns": [
+				{
+					"name": "constant.numeric",
+					"match": "\\b[0-9]+\\b"
+				},
+				{
+					"name": "constant.language",
+					"match": "True|False|None"
+				}]
 		},
 
 		"vars": {
 		  	"patterns": [
-			{
-				"name": "support.function",
-				"match": "\\b(out|in|tail|head|drop|take|length|get|pop|hasElems)"
-			},
-			{
-				"name": "variable.other",
-				"match": "\\b[A-Z|a-z|_][A-Z|a-z|0-9|_]*\\b"
-			}]
+				{
+					"name": "support.function",
+					"match": "\\b(out|in|tail|head|drop|take|length|get|pop|popN|peek|peekN|isEmpty|hasElems|throw)"
+				},
+				{
+					"name": "variable.other",
+					"match": "\\b[A-Z|a-z|_][A-Z|a-z|0-9|_]*\\b"
+				}
+			]
 		}
 	},
 	"scopeName": "source.tb"
