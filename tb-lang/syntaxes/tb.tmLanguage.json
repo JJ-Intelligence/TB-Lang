@@ -4,6 +4,9 @@
 	"name": "TB",
 	"patterns": [
 		{
+			"include": "#comments"
+		},
+		{
 			"include": "#types"
 		},
 		{
@@ -13,9 +16,6 @@
 			"include": "#keywords"
 		},
 		{
-			"include": "#comments"
-		},
-		{
 			"include": "#constants"
 		},
 		{
@@ -23,6 +23,16 @@
 		}
 	],
 	"repository": {
+		"comments": {
+			"patterns": [{
+			  "name": "comment.line",
+			  "match": "--.*"
+		  },
+		  {
+			  "name": "comment.block",
+			  "match": "/\\*.*\\*/"
+		  }]
+	  	},
 		"types" : {
 			"patterns": [
 				{
@@ -41,16 +51,6 @@
 			"patterns": [{
 				"name": "keyword.control.tb",
 				"match": "\\b(if|while|for|return|func|elif|else|type)\\b"
-			}]
-		},
-		"comments": {
-		  	"patterns": [{
-				"name": "comment.line",
-				"match": "-- .*"
-			},
-			{
-				"name": "comment.block",
-				"match": "/\\*.*\\*/"
 			}]
 		},
 		"constants": {
