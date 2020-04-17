@@ -92,13 +92,13 @@ instance Show Type where
     show TException = "Exception"
 
 -- Elif part of an If statement.
-data ExprElif = Elif Expr Expr (Maybe ExprElif)
+data ExprElif = Elif Expr Expr (Maybe ExprElif) Pos
               | Else Expr
               deriving (Eq)
 
 instance Show ExprElif where
-  show (Elif c e1 Nothing) = " elif (" ++ (show c) ++ ") {\n" ++ (tabString $ show e1) ++ "\n}" 
-  show (Elif c e1 (Just e2)) = " elif (" ++ (show c) ++ ") {\n" ++ (tabString $ show e1) ++ "\n}" ++ (show e2) 
+  show (Elif c e1 Nothing _) = " elif (" ++ (show c) ++ ") {\n" ++ (tabString $ show e1) ++ "\n}" 
+  show (Elif c e1 (Just e2) _) = " elif (" ++ (show c) ++ ") {\n" ++ (tabString $ show e1) ++ "\n}" ++ (show e2) 
   show (Else e1) = " else {\n" ++ (tabString $ show e1) ++ "\n}"
 
 -- Literals.
@@ -220,7 +220,7 @@ instance Show Parameters where
   show (FuncParam e1 e2) = (show e1) ++ ", " ++ (show e2)
   show (FuncParamEnd) = ""
 
-data Assignment = DefVar String Expr
+data Assignment = DefVar String Expr Pos
                 deriving (Eq, Show)
 
 data TypeClass = CEq
@@ -228,61 +228,63 @@ data TypeClass = CEq
                | COrd
                deriving (Eq, Ord, Show)
 
-data Expr = If Expr Expr (Maybe ExprElif)
-          | While Expr Expr
-          | For Expr Expr Expr Expr
+data Expr = If Expr Expr (Maybe ExprElif) Pos
+          | While Expr Expr Pos
+          | For Expr Expr Expr Expr Pos
           | Func Parameters Expr
-          | FuncType Parameters Expr (Maybe Parameters) -- Maybe Parameters are the Type constraints
+          | FuncType Parameters Expr (Maybe Parameters)
           | ExprType Type
           | TypeConstraint TypeClass String
-          | Return Expr
-          | FuncCall String Parameters
+          | Return Expr Pos
+          | FuncCall String Parameters Pos 
           | Literal ExprLiteral
           | Value ExprValue
-          | Op BinOp
+          | Op BinOp Pos
           | LocalAssign Assignment
           | GlobalAssign Assignment
           | DefPointerVar String Expr
           | PointerExpr Expr
-          | AddressExpr Expr
-          | BooleanNotExpr Expr
-          | GlobalVar String
-          | Var String
+          | AddressExpr Expr Pos
+          | BooleanNotExpr Expr Pos
+          | GlobalVar String Pos
+          | Var String Pos
           | Seq Expr Expr
-          | FuncBlock Expr
+          | FuncBlock Expr Pos
           | BuiltInFunc String [Expr]
-          | TryCatch Expr Parameters Expr
+          | TryCatch Expr Parameters Expr Pos
           deriving (Eq)
 
 instance Show Expr where
-  show (If c e1 Nothing) = "if (" ++ (show c) ++ ") {\n" ++ (tabString $ show e1) ++ "\n}"
-  show (If c e1 (Just e2)) = "if (" ++ (show c) ++ ") {\n" ++ (tabString $ show e1) ++ "\n}" ++ (show e2)
-  show (While c e1) = "while (" ++ (show c) ++ ") {\n" ++ (tabString $ show e1) ++ "\n}"
-  show (For i c n e1) = "for ("++(show i)++" ; " ++ (show c) ++ " ; " ++ (show n) ++ ") {\n" ++ (tabString $ show e1) ++ "\n}"
-  show (TryCatch e1 cps e2) = "try {\n" ++ (tabString $ show e1) ++ "\n} catch ("++ (show cps) ++ ") {\n" ++ (tabString $ show e2) ++ "\n}"
+  show (If c e1 Nothing _) = "if (" ++ (show c) ++ ") {\n" ++ (tabString $ show e1) ++ "\n}"
+  show (If c e1 (Just e2) _) = "if (" ++ (show c) ++ ") {\n" ++ (tabString $ show e1) ++ "\n}" ++ (show e2)
+  show (While c e1 _) = "while (" ++ (show c) ++ ") {\n" ++ (tabString $ show e1) ++ "\n}"
+  show (For i c n e1 _) = "for ("++(show i)++" ; " ++ (show c) ++ " ; " ++ (show n) ++ ") {\n" ++ (tabString $ show e1) ++ "\n}"
+  show (TryCatch e1 cps e2 _) = "try {\n" ++ (tabString $ show e1) ++ "\n} catch ("++ (show cps) ++ ") {\n" ++ (tabString $ show e2) ++ "\n}"
 
   show (ExprType t) = show t
   show (TypeConstraint tc g) = (show tc) ++ " " ++ g
-  show (LocalAssign (DefVar s (FuncType ps out cs))) = "type " ++ s ++ " (" ++ (show ps) ++ ") -> " ++ (show out) ++ 
+  show (LocalAssign (DefVar s (FuncType ps out cs) _)) = "type " ++ s ++ " (" ++ (show ps) ++ ") -> " ++ (show out) ++ 
       (if cs == Nothing then "" else " ~ (" ++ (show $ fromJust cs) ++ ")")
-  show (LocalAssign (DefVar s (Func ps e1))) = "func " ++ s ++ " (" ++ (show ps) ++ ") = {\n" ++ (tabString $ show e1) ++ "\n}"
-  show (FuncCall s ps)  = s ++ "(" ++ (show ps) ++ ")"
-  show (Return e1) = "return (" ++ (show e1) ++ ")"
-  show (FuncBlock e1) = "{" ++ (show e1) ++ "}"
+  show (LocalAssign (DefVar s (Func ps e1) _)) = "func " ++ s ++ " (" ++ (show ps) ++ ") = {\n" ++ (tabString $ show e1) ++ "\n}"
+  show (FuncCall s ps _)  = s ++ "(" ++ (show ps) ++ ")"
+  show (Return e1 _) = "return (" ++ (show e1) ++ ")"
+  show (FuncBlock e1 _) = "{" ++ (show e1) ++ "}"
   show (BuiltInFunc s _) = s
 
   show (Literal l) = show l
   show (Value v) = show v
-  show (Op op) = show op
+  show (Op op _) = show op
   show (DefPointerVar s e) = "*" ++ s ++ " = " ++ (show e)
   show (PointerExpr e) = "*(" ++ (show e) ++ ")"
-  show (AddressExpr e) = "&(" ++ (show e) ++ ")"
-  show (BooleanNotExpr e) = "!(" ++ (show e) ++ ")"
-  show (GlobalVar s) = "global " ++ s
-  show (LocalAssign (DefVar s e1)) = s ++ " = " ++ (show e1)
-  show (GlobalAssign (DefVar s e1)) = "global " ++ s ++ " = " ++ (show e1)
-  show (Var s) = s
+  show (AddressExpr e _) = "&(" ++ (show e) ++ ")"
+  show (BooleanNotExpr e _) = "!(" ++ (show e) ++ ")"
+  show (GlobalVar s _) = "global " ++ s
+  show (LocalAssign (DefVar s e1 _)) = s ++ " = " ++ (show e1)
+  show (GlobalAssign (DefVar s e1 _)) = "global " ++ s ++ " = " ++ (show e1)
+  show (Var s _) = s
   show (Seq e1 e2) = (show e1) ++ ";\n" ++ (show e2)
+
+type Pos = (Int, Int)
 
 printStdErr :: String -> IO ()
 printStdErr s = do
@@ -291,3 +293,6 @@ printStdErr s = do
 
 tabString :: String -> String
 tabString s = "\t" ++ (foldr (\x acc -> if x == '\n' then "\n\t"++acc else x:acc) "" s)
+
+printPos :: Pos -> String
+printPos (ln, cn) = " on line " ++ (show ln) ++ ", column " ++ (show cn)
