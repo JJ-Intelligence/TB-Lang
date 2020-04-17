@@ -409,7 +409,7 @@ process (Op (Cons e1 e2) l) (global, local, ft) = do
         printStdErr ("Type ERROR: In operation \'" ++ (show (Op (Cons e1 e2) l)) ++ "\'" ++ (printPos l)
             ++ "\nExpression e1 \'" ++ (show e1) ++ "\' has type: " ++ (show $ head t1)
             ++ "\nExpression e2 \'" ++ (show e2) ++ "\' has type: " ++ (show $ head t2)
-            ++ (if isList $ head t2 then let (TList t) = head t2 in "\nBut e1 should have type " ++ (show t) else "But e2 should have type List"))
+            ++ (if isList $ head t2 then let (TList t) = head t2 in "\nBut e1 should have type " ++ (show t) else "\nBut e2 should have type List"))
         exitFailure
     else 
         return()
@@ -534,8 +534,8 @@ process (Op (CompOp op e1 e2) l) (global, local, (ft, tc)) = do
         True -> do -- &&, || operations
             if (head t1) /= TBool || (head t2) /= TBool then do
                 printStdErr ("Type ERROR: In operation \'" ++ (show (Op (CompOp op e1 e2) l)) ++ "\'" ++ (printPos l)
-                    ++ "\nExpression e1 \'"++ (show e1) ++"\'' has type: " ++ (show $ head t1)
-                    ++ "\nExpression e2 \'"++ (show e2) ++"\'' has type: " ++ (show $ head t2)
+                    ++ "\nExpression e1 \'"++ (show e1) ++"\' has type: " ++ (show $ head t1)
+                    ++ "\nExpression e2 \'"++ (show e2) ++"\' has type: " ++ (show $ head t2)
                     ++ "\nBut both expressions should have type Boolean")
                 exitFailure
             else 
@@ -548,8 +548,8 @@ process (Op (CompOp op e1 e2) l) (global, local, (ft, tc)) = do
                         return ()
                     else do
                         printStdErr ("Type ERROR: In operation \'" ++ (show (Op (CompOp op e1 e2) l)) ++ "\'" ++ (printPos l)
-                            ++ "\nExpression e1 \'"++ (show e1) ++"\'' has type: " ++ (show $ head t1)
-                            ++ "\nExpression e2 \'"++ (show e2) ++"\'' has type: " ++ (show $ head t2)
+                            ++ "\nExpression e1 \'"++ (show e1) ++"\' has type: " ++ (show $ head t1)
+                            ++ "\nExpression e2 \'"++ (show e2) ++"\' has type: " ++ (show $ head t2)
                             ++ "\nBut both expressions should be children of the Eq type class")
                         exitFailure
 
@@ -558,8 +558,8 @@ process (Op (CompOp op e1 e2) l) (global, local, (ft, tc)) = do
                         return ()
                     else do
                         printStdErr ("Type ERROR: In operation \'" ++ (show (Op (CompOp op e1 e2) l)) ++ "\'" ++ (printPos l)
-                            ++ "\nExpression e1 \'"++ (show e1) ++"\'' has type: " ++ (show $ head t1)
-                            ++ "\nExpression e2 \'"++ (show e2) ++"\'' has type: " ++ (show $ head t2)
+                            ++ "\nExpression e1 \'"++ (show e1) ++"\' has type: " ++ (show $ head t1)
+                            ++ "\nExpression e2 \'"++ (show e2) ++"\' has type: " ++ (show $ head t2)
                             ++ "\nBut both expressions should be children of the Ord type class")
                         exitFailure
 
@@ -574,7 +574,7 @@ process (If c e1 e2 l) (global, local, ft) = do
             (if length tc /= 1 then 
                 "\nThe condition \'" ++ (show c) ++ "\' has ambiguous types: " ++ (show $ head tc) ++ (foldr (\k acc -> ", " ++ (show k) ++ acc) "" $ tail tc) 
             else 
-                "\nThe condition \'"++ (show c) ++ "\'' has type: " ++ (show $ head tc))
+                "\nThe condition \'"++ (show c) ++ "\' has type: " ++ (show $ head tc))
             ++ "\nBut it should have type Boolean")
         exitFailure
     else 
@@ -605,7 +605,7 @@ process (While c e1 l) (global, local, ft) = do
             (if length ts /= 1 then 
                 "\nThe condition \'" ++ (show c) ++ "\' has ambiguous types: " ++ (show $ head ts) ++ (foldr (\k acc -> ", " ++ (show k) ++ acc) "" $ tail ts) 
             else 
-                "\nThe condition \'"++ (show c) ++ "\'' has type: " ++ (show $ head ts))
+                "\nThe condition \'"++ (show c) ++ "\' has type: " ++ (show $ head ts))
             ++ "\nBut it should have type Boolean")
         exitFailure
     else 
@@ -624,7 +624,7 @@ process (For i c n e l) (global, local, ft) = do
             (if length ts2 /= 1 then 
                 "\nThe condition \'" ++ (show c) ++ "\' has ambiguous types: " ++ (show $ head ts2) ++ (foldr (\k acc -> ", " ++ (show k) ++ acc) "" $ tail ts2) 
             else 
-                "\nThe condition \'"++ (show c) ++ "\'' has type: " ++ (show $ head ts2))
+                "\nThe condition \'"++ (show c) ++ "\' has type: " ++ (show $ head ts2))
             ++ "\nBut it should have type Boolean")
         exitFailure
     else 
