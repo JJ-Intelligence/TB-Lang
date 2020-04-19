@@ -265,10 +265,10 @@ instance Show Expr where
   show (TypeConstraint tc g) = (show tc) ++ " " ++ g
   show (LocalAssign (DefVar s (FuncType ps out cs) _)) = "type " ++ s ++ " (" ++ (show ps) ++ ") -> " ++ (show out) ++ 
       (if cs == Nothing then "" else " ~ (" ++ (show $ fromJust cs) ++ ")")
-  show (LocalAssign (DefVar s (Func ps e1) _)) = "func " ++ s ++ " (" ++ (show ps) ++ ") = {\n" ++ (tabString $ show e1) ++ "\n}"
+  show (LocalAssign (DefVar s (Func ps e1) _)) = "func " ++ s ++ " (" ++ (show ps) ++ ") = " ++ (show e1)
   show (FuncCall s ps _)  = s ++ "(" ++ (show ps) ++ ")"
   show (Return e1 _) = "return (" ++ (show e1) ++ ")"
-  show (FuncBlock e1 _) = "{" ++ (show e1) ++ "}"
+  show (FuncBlock e1 _) = "{\n" ++ (tabString $ show e1) ++ "\n}"
   show (BuiltInFunc s _) = s
 
   show (Literal l) = show l

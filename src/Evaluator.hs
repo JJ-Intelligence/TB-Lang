@@ -75,7 +75,8 @@ insertReserved env store = helper ls env (MapL.insert storedGlobalEnv (GlobalEnv
                 ("StreamOutOfInputException", (VException StreamOutOfInputException)),
                 ("InvalidParameterException", (VException InvalidParameterException)),
                 ("NonExhaustivePatternException", (VException NonExhaustivePatternException)),
-                ("InvalidInputException", (VException InvalidInputException))]
+                ("InvalidInputException", (VException InvalidInputException)),
+                ("xs", (VList (TList TInt) (replicate 1000000 (VInt 1))))]
 
           helper xs env store = foldr (\(s,e) (env', store', a) -> (Map.insert s a env', MapL.insert a e store', a+1)) (env, store, builtInFuncStart) xs
 

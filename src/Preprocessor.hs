@@ -36,7 +36,8 @@ insertBuiltIn local = foldr (\(s,t) acc -> Map.insert s [t] acc) local ls
             ("StreamOutOfInputException", TException),
             ("InvalidParameterException", TException),
             ("NonExhaustivePatternException", TException),
-            ("InvalidInputException", TException)]
+            ("InvalidInputException", TException),
+            ("xs", TList TInt)]
 
 preprocess :: Expr -> IO ()
 preprocess e = do
@@ -52,7 +53,8 @@ preprocess e = do
 process :: Expr -> ProcessState -> IO ([Type], ProcessState)
 process (Seq e1 (Return e2 l)) (global, local, (ft,tc)) = do
     (t', (global', local', (ft', tc'))) <- process e1 (global, local, (ft, tc))
-    process (Return e2 l) (global', local', (init ft', tc'))
+    (t'', (global'', local'', (ft'', tc''))) <- process (Return e2 l) (global', local', (ft', tc'))    
+    return (t'', (global'', local'', (if length ft'' > 1 then init ft'' else ft'', tc'')))
 
 process (Seq e1 e2) (global, local, ft) = do
     (t', (global', local', ft')) <- process e1 (global, local, ft)
@@ -111,17 +113,22 @@ process (Return e1 l) (global, local, (ft, tc)) = do
     return ([TNone], (global', local', ((if (head t `elem` ft) then ft else (head t):ft), tc)))
 
 
-process (FuncBlock e1 l) (global, local, (ft, tc)) = do 
+process (FuncBlock e1 l) (global, local, (ft, tc)) = do
     (t, (global', local', (ft', tc'))) <- process e1 (global, local, ([TNone], tc))
+    case isReturn e1 && length ft' == 2 of
+        True -> return (filter (/= TNone) ft', (global', local', (ft,tc)))
+        False -> do
+            if length ft' /= 1 then do
+                printStdErr ("Type ERROR: In function block \'" ++ (show (FuncBlock e1 l)) ++ "\'" ++ (printPos l)
+                    ++ "\nReturn types are ambiguous: " ++ (show $ head ft') ++ (foldr (\k acc -> ", " ++ (show k) ++ acc) "" $ tail ft'))
+                exitFailure
+            else
+                return ()
+            return (ft', (global', local', (ft,tc)))
 
-    if length ft' /= 1 then do
-        printStdErr ("Type ERROR: In function block \'" ++ (show (FuncBlock e1 l)) ++ "\'" ++ (printPos l)
-            ++ "\nReturn types are ambiguous: " ++ (show $ head ft') ++ (foldr (\k acc -> ", " ++ (show k) ++ acc) "" $ tail ft'))
-        exitFailure
-    else
-        return ()
-
-    return (ft', (global', local', (ft,tc)))
+    where
+        isReturn (Return _ _) = True
+        isReturn _ = False
 
 
 -- Declaring a function type.
@@ -131,7 +138,6 @@ process (LocalAssign (DefVar s (FuncType ps out cs) l)) (global, local, ft) = do
             printStdErr ("Type ERROR: In function type definition \'" ++ (show $ LocalAssign (DefVar s (FuncType ps out cs) l)) ++ "\'"  ++ (printPos l)
                 ++"\nThe functions type has already been declared as: " ++ (show (TFunc ps' out' cs')))
             exitFailure
-
         _ -> do
             let ts = evaluateFuncType (FuncType ps out cs)
             return ([ts], (global, Map.insert s [ts] local, ft))
@@ -207,18 +213,33 @@ process (LocalAssign (DefVar s (Func ps' e1) l)) (global, local, (ft, tc)) = do
 
 process (LocalAssign (DefVar s e1 _)) (global, local, ft) = do
     (t', (global', local', ft')) <- process e1 (global, local, ft)
-    let lv = (lookupT s (global, local))
     return (t', (global', Map.insert s t' local', ft'))
+
+process (GlobalAssign (DefVar s e1 _)) state@(global, local, (ft, _)) = do
+    (t', (global', local', ft')) <- process e1 state
+    case ft == [] of
+        True -> return (t', (global', Map.insert s t' local', ft'))
+        False -> return (t', (Map.insert s t' global', local', ft'))
 
 
 process (Var s l) state@(global, local, ft) = do
     let t = (lookupT s (global, local))
-    if t == Nothing
-        then do
-            printStdErr ("Access ERROR: In variable access \'" ++ (show (Var s l)) ++ "\'" ++ (printPos l)
-                ++ "\nVariable " ++ s ++ " has not been declared yet")
-            exitFailure
-        else return ()
+    if t == Nothing then do
+        printStdErr ("Access ERROR: In variable access \'" ++ (show (Var s l)) ++ "\'" ++ (printPos l)
+            ++ "\nVariable " ++ s ++ " has not been declared yet")
+        exitFailure
+    else 
+        return ()
+    return ((fromJust t), state)
+
+process (GlobalVar s l) state@(global, local, (ft, _)) = do
+    let t = lookupGlobal s (if ft == [] then local else global)
+    if t == Nothing then do
+        printStdErr ("Access ERROR: In variable access \'" ++ (show (Var s l)) ++ "\'" ++ (printPos l)
+            ++ "\nGlobal variable " ++ s ++ " has not been declared yet")
+        exitFailure
+    else 
+        return ()
     return ((fromJust t), state)
 
 process (TryCatch e1 ps e2 l) (global, local, ft) = do
@@ -704,3 +725,6 @@ lookupT name (global, local)
     where
         lLookup = Map.lookup name local
         gLookup = Map.lookup name global
+
+lookupGlobal :: String -> TStore -> Maybe [Type]
+lookupGlobal s global = Map.lookup s global
