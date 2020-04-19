@@ -216,7 +216,7 @@ process (Var s l) state@(global, local, ft) = do
     if t == Nothing
         then do
             printStdErr ("Access ERROR: In variable access \'" ++ (show (Var s l)) ++ "\'" ++ (printPos l)
-                ++ "\nVariable " ++ s ++ "has not been declared yet")
+                ++ "\nVariable " ++ s ++ " has not been declared yet")
             exitFailure
         else return ()
     return ((fromJust t), state)
@@ -317,6 +317,10 @@ process (FuncCall s ps l) (global, local, (ft, cs)) = do
         matchParamsToType tc (global, local, cs) ts (FuncParamEnd) es
             | ts /= [] || es /= [] = return (Just $ es, (global, local))
             | otherwise = return (Nothing, (global, local))
+        matchParamsToType tc (global, local, cs) [] _ es = do
+            printStdErr ("Type ERROR: In function call \'" ++ (show (FuncCall s ps l)) ++ "\'" ++ (printPos l)
+                ++ "\nThere are more arguments given, than parameters declared for this function.") 
+            exitFailure
         matchParamsToType tc (global, local, cs) (t:ts) (FuncParam e1 e2) es = do
             (t', (global', local', ft')) <- process e1 (global, local, ([], cs))
 

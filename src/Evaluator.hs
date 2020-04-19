@@ -12,7 +12,7 @@ import System.Exit (exitFailure)
 
 import Debug.Trace
 import qualified Data.Time.Clock.POSIX as Time -- DEBUGGING
-getTime = round `fmap` Time.getPOSIXTime -- DEBUGGING
+getTime = Time.getPOSIXTime -- DEBUGGING
 
 -- Reserved elements of the Store.
 builtInFuncStart = 3 -- Starting address for built in functions in the env/store.
@@ -480,8 +480,8 @@ step (Value (VBool b'), env', store, nextAddr, callS, (BinOpH (BinCompOp Or (Val
     | otherwise = step (Value $ VBool $ b || b', env, store, nextAddr, callS, kon)
 
 -- Comparison <, >, == operations.
-step (Value e1, env', store, nextAddr, callS, (BinOpH (BinCompOp LessThan (Value e2) env)):kon) = step (Value $ VBool $ e2 < e1, env, store, nextAddr, callS, kon)
-step (Value e1, env', store, nextAddr, callS, (BinOpH (BinCompOp GreaterThan (Value e2) env)):kon) = step (Value $ VBool $ e1 > e2, env, store, nextAddr, callS, kon)
+step (Value e2, env', store, nextAddr, callS, (BinOpH (BinCompOp LessThan (Value e1) env)):kon) = step (Value $ VBool $ e1 < e2, env, store, nextAddr, callS, kon)
+step (Value e2, env', store, nextAddr, callS, (BinOpH (BinCompOp GreaterThan (Value e1) env)):kon) = step (Value $ VBool $ e1 > e2, env, store, nextAddr, callS, kon)
 step (Value e2, env', store, nextAddr, callS, (BinOpH (BinCompOp Equality (Value e1) env)):kon) = step (Value $ VBool $ e1 == e2, env, store, nextAddr, callS, kon)
 step (Value e2, env', store, nextAddr, callS, (BinOpH (BinCompOp NotEquals (Value e1) env)):kon) = step (Value $ VBool $ e1 /= e2, env, store, nextAddr, callS, kon)
 
@@ -893,28 +893,24 @@ updateEnvStore env store nextAddr s e1 = (env', updateStore store addr e1, if lo
     where 
         lookupInEnv = Map.lookup s env
         (env', addr) = case lookupInEnv of
-                Just (a) -> (env, a)
-                Nothing -> addToEnv env store nextAddr s
+            Just (a) -> (env, a)
+            Nothing -> addToEnv env store nextAddr s
 
 -- Adds a new String to the Environment, and returns a tuple of the new Environment and the created Address.
 -- Assumes the String is not in the Environment.
 addToEnv :: Environment -> Store -> Address -> String -> (Environment, Address)
 addToEnv env store nextAddr s = (Map.insert s addr env, addr)
-    where addr = case Map.lookup s env of 
-                        Just (a) -> a
-                        Nothing -> nextAddr
+    where 
+        addr = case Map.lookup s env of 
+            Just (a) -> a
+            Nothing -> nextAddr
 
 -- Updates an Address mapping in the store.
 -- If the inputted Address is not in the store, then it will be inserted.
 updateStore :: Store -> Address -> ExprValue -> Store
 updateStore store a e@(VFunc ft []) = MapL.insert a e store
-updateStore store a (VFuncUnTypedDef xs) = MapL.update (\x -> Just (VFunc (TFunc ts out cs) (ys ++ xs))) a store
-    where (Just (VFunc (TFunc ts out cs) ys)) = MapL.lookup a store
-
-updateStore store a e1
-    | item == Nothing = MapL.insert a e1 store
-    | otherwise = MapL.update (\x -> Just e1) a store
-    where item = MapL.lookup a store
+updateStore store a (VFuncUnTypedDef xs) = MapL.update (\(VFunc (TFunc ts out cs) ys) -> Just (VFunc (TFunc ts out cs) (ys++xs))) a store
+updateStore store a e = MapL.insert a e store
 
 -- Takes in stream num, num of values to get from the buffer, and the current store.
 -- Returns updated store and list of values retrieved.
@@ -965,11 +961,10 @@ updateStreams n store = do
                 [] -> case ks of
                     [] -> return $ Right $ helper 0 store
                     _ -> return $ Right $ foldl (\store' k -> MapL.update (\(VStream i ys) -> Just (VStream i (ys++[VNone]))) (-k) store') store ks
-                _ -> case ks of 
+                _ -> case ks of
                     [] -> return $ Right $ fst $ foldl (\(store', c) xs -> case MapL.lookup c store' of
                                                 Just (VStream i ys) -> (MapL.update (\x -> Just (VStream i (ys++xs))) c store', c-1)
                                                 Nothing -> (MapL.insert c (VStream (abs c) xs) store', c-1)
-                                                _ -> error "Should be a VStream in negative Store addresses."
                                 ) (store, 0) xss
                     _ -> case (length xss)-1 < (last ks) of
                         False -> return $ Right $ foldl (\store' k -> MapL.update (\(VStream i ys) -> Just (VStream i (ys++(xss!!k)))) (-k) store') store ks
