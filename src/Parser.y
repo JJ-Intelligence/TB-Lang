@@ -28,7 +28,7 @@ import Expression
     ')'       { TokenCloseParen _ }
     '{'       { TokenOpenCurly $$ }
     '}'       { TokenCloseCurly _ }
-    '['       { TokenOpenSquare _ }
+    '['       { TokenOpenSquare $$ }
     ']'       { TokenCloseSquare _ }
     ','       { TokenComma $$ }
 
@@ -107,10 +107,10 @@ E : E ';' E                                 { Seq $1 $3 }
   | return '(' ')'                          { Return (Literal ENone) $1 }
   | var '(' P ')'                           { FuncCall (fst $1) $3 (snd $1) }
   | var '('')'                              { FuncCall (fst $1) FuncParamEnd (snd $1) }
-  -- | var '++'                             { FuncBlock (Seq (DefVar $1 (Op (MathOp Plus (Var $1) (Literal $ EInt 1)))) (Return (Op (MathOp Min (Var $1) (Literal $ EInt 1))))) }
-  -- | var '--'                             { FuncBlock (Seq (DefVar $1 (Op (MathOp Min (Var $1) (Literal $ EInt 1)))) (Return (Op (MathOp Plus (Var $1) (Literal $ EInt 1))))) }
-  -- | '++' var                             { DefVar $2 (Op (MathOp Plus (Var $2) (Literal $ EInt 1))) }
-  -- | '--' var                             { DefVar $2 (Op (MathOp Min (Var $2) (Literal $ EInt 1))) }
+  | var '++'                                { FuncBlock (Seq (LocalAssign $ DefVar (fst $1) (Op (MathOp Plus (Var (fst $1) (snd $1)) (Literal $ EInt 1)) (snd $1)) (snd $1)) (Return (Op (MathOp Min (Var (fst $1) (snd $1)) (Literal $ EInt 1)) (snd $1)) (snd $1))) (snd $1) }
+  | var '--'                                { FuncBlock (Seq (LocalAssign $ DefVar (fst $1) (Op (MathOp Min (Var (fst $1) (snd $1)) (Literal $ EInt 1)) (snd $1)) (snd $1)) (Return (Op (MathOp Plus (Var (fst $1) (snd $1)) (Literal $ EInt 1)) (snd $1)) (snd $1))) (snd $1) } 
+  | '++' var                                { LocalAssign $ DefVar (fst $2) (Op (MathOp Plus (Var (fst $2) (snd $2)) (Literal $ EInt 1)) (snd $2)) (snd $2) }
+  | '--' var                                { LocalAssign $ DefVar (fst $2) (Op (MathOp Min (Var (fst $2) (snd $2)) (Literal $ EInt 1)) (snd $2)) (snd $2) }
   | '&'E                                    { AddressExpr $2 $1 }
   | '*'E %prec POINT                        { PointerExpr $2 }
   | '!' E                                   { BooleanNotExpr $2 $1 }
@@ -197,6 +197,7 @@ O : E '==' E                                { Op (CompOp Equality $1 $3) $2 }
 
 -- List operations.
 C : '[' C2 ']'                              { $2 }
+  | '[' E ']'                               { (Op (Cons $2 (Literal Empty)) $1) }
   | '[' ']'                                 { Literal Empty }
 
 C2 : E ',' C2                               { Op (Cons $1 $3) $2 }
@@ -213,7 +214,8 @@ L : '-'int %prec NEG                        { Literal (EInt (-$2)) }
 
 parseError :: [Token] -> a
 parseError [] = error "Parse ERROR: End of Tokens parse error"
-parseError (x:xs) = error ("Parse ERROR: Trying to parse \'" ++ (show x) ++ "\', on line " ++ (show l) ++ ", column " ++ (show c))
+parseError (x:xs) = error ("Parse ERROR: Trying to parse \'" ++ (if last s == ' ' then s else init s) ++ "\', on line " ++ (show l) ++ ", column " ++ (show c))
         where (l,c) = tokenPos x
+              s = show x
 
 }

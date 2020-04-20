@@ -36,8 +36,7 @@ insertBuiltIn local = foldr (\(s,t) acc -> Map.insert s [t] acc) local ls
             ("StreamOutOfInputException", TException),
             ("InvalidParameterException", TException),
             ("NonExhaustivePatternException", TException),
-            ("InvalidInputException", TException),
-            ("xs", TList TInt)]
+            ("InvalidInputException", TException)]
 
 preprocess :: Expr -> IO ()
 preprocess e = do

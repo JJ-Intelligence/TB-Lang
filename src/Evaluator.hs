@@ -75,8 +75,7 @@ insertReserved env store = helper ls env (MapL.insert storedGlobalEnv (GlobalEnv
                 ("StreamOutOfInputException", (VException StreamOutOfInputException)),
                 ("InvalidParameterException", (VException InvalidParameterException)),
                 ("NonExhaustivePatternException", (VException NonExhaustivePatternException)),
-                ("InvalidInputException", (VException InvalidInputException)),
-                ("xs", (VList (TList TInt) (replicate 1000000 (VInt 1))))]
+                ("InvalidInputException", (VException InvalidInputException))]
 
           helper xs env store = foldr (\(s,e) (env', store', a) -> (Map.insert s a env', MapL.insert a e store', a+1)) (env, store, builtInFuncStart) xs
 
@@ -545,7 +544,9 @@ step (e, env, store, a, _, (CatchFrame _ _ _ callS):kon) = step (e, env, store, 
 step s@(_, _, _, _, _, [Done]) = return s
 
 -- No defined step for the current State.
-step s@(exp, env, store, nextAddr, callS, kon) = error $ "ERROR evaluating expression " ++ (show s) ++ ", no CESK step defined."
+step s@(exp, env, store, nextAddr, callS, kon) = do
+    printStdErr $ "ERROR in evaluation. This expression could not be evaluated: " ++ (show exp)
+    exitFailure
 
 
 -- Pattern matches a function parameters with some given arguments, returning the functions Expr value, as well as updated Env, Store, and next Address.

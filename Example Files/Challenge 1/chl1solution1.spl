@@ -1,19 +1,60 @@
 -- Challenge 1, solution 1
-setIn([0,1]);
+-- setIn([0,1]);
 
-as = in(0);
-bs = in(1);
+-- as = in(0);
+-- bs = in(1);
 
-while (hasElems(2, as)) {
-    out(popN(2, as));
-    out(pop(bs));
+-- while (hasElems(2, as)) {
+--     out(popN(2, as));
+--     out(pop(bs));
+-- };
+
+-- if (isEmpty(as) == False) {
+--     out(pop(as));
+-- };
+
+-- while (length(xs) > 2) {
+--     out(take(2, xs));
+--     xs = drop(2, xs);
+-- }
+
+
+-- x = 5;
+
+-- type solve (Int) -> Int;
+-- func solve (n) = {
+--     global x = True;
+--     return (1);
+-- };
+
+-- out(solve(9));
+-- out(x+1);
+
+x = 1;
+y = &x;
+*y = *y + 5;
+out(x);
+out(*y);
+
+xs = [1,2];
+
+if (length(xs) == 1) {
+    out(head(xs));
+} elif (xs == [1,2]) {
+    out(xs);
+} else {
+    out(0);
 };
 
-if (isEmpty(as) == False) {
-    out(pop(as));
+for (i = 0; i < 10; i++) {
+    out(i);
 };
 
-out(pop(as));
+while (length(xs) < 10) {
+    xs = 1:xs;
+};
+
+
 
 -- Challenge 1, solution 1
 -- type solve ((Itr Int)*, (Itr Int)*) -> NoneType;
