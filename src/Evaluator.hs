@@ -12,7 +12,7 @@ import System.Exit (exitFailure)
 
 import Debug.Trace
 import qualified Data.Time.Clock.POSIX as Time -- DEBUGGING
-getTime = round `fmap` Time.getPOSIXTime -- DEBUGGING
+getTime = Time.getPOSIXTime -- DEBUGGING
 
 -- Reserved elements of the Store.
 builtInFuncStart = 3 -- Starting address for built in functions in the env/store.
@@ -24,52 +24,52 @@ insertReserved :: Environment -> Store -> (Environment, Store, Address)
 insertReserved env store = helper ls env (MapL.insert storedGlobalEnv (GlobalEnv Map.empty) store)
     where ls = [("tail", (VFunc 
                     (TFunc [TList $ TGeneric "a"] (TList $ TGeneric "a") []) 
-                    [([VVar "xs"], BuiltInFunc "tail" [Var "xs"])])),
+                    [([VVar "xs"], BuiltInFunc "tail" [Var "xs" (0,0)])])),
                 ("head", (VFunc 
                     (TFunc [TList $ TGeneric "a"] (TGeneric "a") []) 
-                    [([VVar "xs"], BuiltInFunc "head" [Var "xs"])])),
+                    [([VVar "xs"], BuiltInFunc "head" [Var "xs" (0,0)])])),
                 ("drop", (VFunc 
                     (TFunc [TInt, TList $ TGeneric "a"] (TList $ TGeneric "a") []) 
-                    [([VVar "n", VVar "xs"], BuiltInFunc "drop" [Var "n", Var "xs"])])),
+                    [([VVar "n", VVar "xs"], BuiltInFunc "drop" [Var "n" (0,0), Var "xs" (0,0)])])),
                 ("take", (VFunc 
                     (TFunc [TInt, TList $ TGeneric "a"] (TList $ TGeneric "a") []) 
-                    [([VVar "n", VVar "xs"], BuiltInFunc "take" [Var "n", Var "xs"])])),
+                    [([VVar "n", VVar "xs"], BuiltInFunc "take" [Var "n" (0,0), Var "xs" (0,0)])])),
                 ("length", (VFunc 
                     (TFunc [TList $ TGeneric "a"] (TInt) []) 
-                    [([VVar "xs"], BuiltInFunc "length" [Var "xs"])])),
+                    [([VVar "xs"], BuiltInFunc "length" [Var "xs" (0,0)])])),
                 ("get", (VFunc 
                     (TFunc [TInt, TList $ TGeneric "a"] (TGeneric "a") []) 
-                    [([VVar "n", VVar "xs"], BuiltInFunc "get" [Var "n", Var "xs"])])),
+                    [([VVar "n", VVar "xs"], BuiltInFunc "get" [Var "n" (0,0), Var "xs" (0,0)])])),
                 ("out", (VFunc 
                     (TFunc [TGeneric "a"] (TNone) []) 
-                    [([VVar "v"], BuiltInFunc "out" [Var "v"])])),
+                    [([VVar "v"], BuiltInFunc "out" [Var "v"(0,0)])])),
                 ("in", (VFunc 
                     (TFunc [TInt] (TRef $ TStream) []) 
-                    [([VVar "v"], BuiltInFunc "in" [Var "v"])])),
+                    [([VVar "v"], BuiltInFunc "in" [Var "v"(0,0)])])),
                 ("setIn", (VFunc 
                     (TFunc [TList $ TInt] (TNone) []) 
-                    [([VVar "xs"], BuiltInFunc "setIn" [Var "xs"])])),
+                    [([VVar "xs"], BuiltInFunc "setIn" [Var "xs"(0,0)])])),
                 ("pop", (VFunc 
                     (TFunc [TRef $ TIterable $ TGeneric "a"] (TGeneric "a") []) 
-                    [([VPointer "xs"], BuiltInFunc "pop" [Var "xs"])])),
+                    [([VPointer "xs"], BuiltInFunc "pop" [Var "xs"(0,0)])])),
                 ("popN", (VFunc 
                     (TFunc [TInt, TRef $ TIterable $ TGeneric "a"] (TList $ TGeneric "a") []) 
-                    [([VVar "n", VPointer "xs"], BuiltInFunc "popN" [Var "n", Var "xs"])])),
+                    [([VVar "n", VPointer "xs"], BuiltInFunc "popN" [Var "n"(0,0), Var "xs"(0,0)])])),
                 ("peek", (VFunc 
                     (TFunc [TRef $ TIterable $ TGeneric "a"] (TGeneric "a") []) 
-                    [([VPointer "xs"], BuiltInFunc "peek" [Var "xs"])])),
+                    [([VPointer "xs"], BuiltInFunc "peek" [Var "xs"(0,0)])])),
                 ("peekN", (VFunc 
                     (TFunc [TInt, TRef $ TIterable $ TGeneric "a"] (TList $ TGeneric "a") []) 
-                    [([VVar "n", VPointer "xs"], BuiltInFunc "peekN" [Var "n", Var "xs"])])),
+                    [([VVar "n", VPointer "xs"], BuiltInFunc "peekN" [Var "n"(0,0), Var "xs"(0,0)])])),
                 ("isEmpty", (VFunc 
                     (TFunc [TRef $ TIterable $ TGeneric "a"] (TBool) []) 
-                    [([VPointer "xs"], BuiltInFunc "isEmpty" [Var "xs"])])),
+                    [([VPointer "xs"], BuiltInFunc "isEmpty" [Var "xs"(0,0)])])),
                 ("hasElems", (VFunc
                     (TFunc [TInt, TRef $ TIterable $ TGeneric "a"] (TBool) [])
-                    [([VVar "n", VPointer "xs"], BuiltInFunc "hasElems" [Var "n", Var "xs"])])),
+                    [([VVar "n", VPointer "xs"], BuiltInFunc "hasElems" [Var "n"(0,0), Var "xs"(0,0)])])),
                 ("throw", (VFunc
                     (TFunc [TException] (TNone) [])
-                    [([VVar "e"], BuiltInFunc "throw" [Var "e"])])),
+                    [([VVar "e"], BuiltInFunc "throw" [Var "e"(0,0)])])),
                 ("EmptyListException", (VException EmptyListException)),
                 ("IndexOutOfBoundException", (VException IndexOutOfBoundException)),
                 ("StreamOutOfInputException", (VException StreamOutOfInputException)),
@@ -102,22 +102,16 @@ step (Seq e1 e2, env, store, nextAddr, callS, kon) = step (e1, env, store, nextA
 step (Value e1, env, store, nextAddr, callS, (HBinOp (BinSeqOp e2)):kon) = step (e2, env, store, nextAddr, callS, kon)
 
 -- Defining the type of a new function.
-step (LocalAssign (DefVar s (FuncType ps out cs)), env, store, nextAddr, callS, kon) = step (Value VNone, env', store', nextAddr', callS, kon)
+step (LocalAssign (DefVar s (FuncType ps out cs) _), env, store, nextAddr, callS, kon) = step (Value VNone, env', store', nextAddr', callS, kon)
     where
         (env', store', nextAddr') = updateEnvStore env store nextAddr s (VFunc ft [])
         ft = evaluateFuncType (FuncType ps out cs)
 
 -- Defining a new Function.
-step (LocalAssign (DefVar s (Func ps e1)), env, store, nextAddr, callS, kon)
-    | not (validType store cs ts params) = error $ "Type error in defining function, function type doesn't match defined type: " ++ (show $ (DefVar s (Func ps e1)))
-    | checkNoDuplicates [] $ usedVars params = step (Value fv, env', store', nextAddr', callS, kon)
-    | otherwise = error $ "Function '" ++ s ++"' has parameters containing multiple variables of the same name. \nIn " ++ (show $ Func ps e1)
+step (LocalAssign (DefVar s (Func ps e1) _), env, store, nextAddr, callS, kon) = step (Value fv, env', store', nextAddr', callS, kon)
     where 
+        (env', store', nextAddr') = updateEnvStore env store nextAddr s (VFuncUnTypedDef [(evaluateParams ps, e1)])
         fv = lookupVar s env' store'
-        (VFunc (TFunc ts _ cs) _) = fv
-        (env', store', nextAddr') = updateEnvStore env store nextAddr s (VFuncUnTypedDef fdefs)
-        fdefs = [(params, e1)]
-        params = evaluateParams ps
 
         checkNoDuplicates seen [] = True
         checkNoDuplicates seen (x:xs) 
@@ -134,92 +128,87 @@ step (LocalAssign (DefVar s (Func ps e1)), env, store, nextAddr, callS, kon)
                 helper _ = []
 
         evaluateParams FuncParamEnd = []
-        evaluateParams (FuncParam (PointerExpr (Op (Cons e1 e2))) e3) = VPointerList TParamList (evalConsParam $ Op (Cons e1 e2)) : evaluateParams e3
-        evaluateParams (FuncParam (Op (Cons e1 e2)) e3) = VList TParamList (evalConsParam $ Op (Cons e1 e2)) : evaluateParams e3
+        evaluateParams (FuncParam (PointerExpr (Op (Cons e1 e2) l)) e3) = VPointerList TParamList (evalConsParam $ Op (Cons e1 e2) l) : evaluateParams e3
+        evaluateParams (FuncParam (Op (Cons e1 e2) l) e3) = VList TParamList (evalConsParam $ Op (Cons e1 e2) l) : evaluateParams e3
         evaluateParams (FuncParam e1 e2) = evalSingleParam e1 : evaluateParams e2
 
         evalSingleParam (Literal (EInt n)) = (VInt n)
         evalSingleParam (Literal (EBool b)) = (VBool b)
         evalSingleParam (Literal Empty) = (VList (TList TEmpty) [])
-        evalSingleParam (Var s) = (VVar s)
-        evalSingleParam (PointerExpr (Var s)) = (VPointer s)
+        evalSingleParam (Var s _) = (VVar s)
+        evalSingleParam (PointerExpr (Var s _)) = (VPointer s)
         evalSingleParam (PointerExpr e1) = VPointerList TParamList [evalSingleParam e1]
 
-        evalConsParam (Op (Cons e1 e2)) = evalSingleParam e1 : evalConsParam e2
+        evalConsParam (Op (Cons e1 e2) l) = evalSingleParam e1 : evalConsParam e2
         evalConsParam e2 = [evalSingleParam e2]
 
 
 -- Defining a new Var.
 -- Looks for the variable in the Env, and replaces it in the Store if it exists, else it creates it.
-step (LocalAssign (DefVar s e1), env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, (DefLocalVarFrame s):kon)
+step (LocalAssign (DefVar s e1 _), env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, (DefLocalVarFrame s):kon)
 step (Value e1, env, store, nextAddr, callS, (DefLocalVarFrame s):kon) = step (Value e1, env', store', nextAddr', callS, kon)
     where (env', store', nextAddr') = updateEnvStore env store nextAddr s e1
 
-step (GlobalAssign (DefVar s e1), env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, (DefGlobalVarFrame s):kon) -- TODO FIXMEEE
+step (GlobalAssign (DefVar s e1 _), env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, (DefGlobalVarFrame s):kon) -- TODO FIXMEEE
 step (Value e1, env, store, nextAddr, callS, (DefGlobalVarFrame s):kon) = step (Value e1, env, store', nextAddr, callS, kon)
     where store' = updateGlobalEnvInStore store s e1
 
 -- Defining a pointer variable.
 step (DefPointerVar s e1, env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, (DefPointerVarFrame s):kon)
-step (Value e1, env, store, nextAddr, callS, (DefPointerVarFrame s):kon)
-    | (isTRef val) = step (Value e1, env, store', nextAddr, callS, kon)
-    | otherwise = error "Pointer is not a reference!"
+step (Value e1, env, store, nextAddr, callS, (DefPointerVarFrame s):kon) = step (Value e1, env, store', nextAddr, callS, kon)
     where val = lookupVar s env store
           (VRef r) = val
           store' = updateStore store r e1
 
-          isTRef (VRef _) = True
-          isTRef _ = False
-
 -- Accessing a variable reference.
-step (Var s, env, store, nextAddr, callS, kon) = step (Value $ lookupVar s env store, env, store, nextAddr, callS, kon)
-step (GlobalVar s, env, store, nextAddr, callS, kon) = step (Value $ lookupVar s globalEnv store, env, store, nextAddr, callS, kon)
+step (Var s _, env, store, nextAddr, callS, kon) = step (Value $ lookupVar s env store, env, store, nextAddr, callS, kon)
+step (GlobalVar s _, env, store, nextAddr, callS, kon) = step (Value $ lookupVar s globalEnv store, env, store, nextAddr, callS, kon)
     where (GlobalEnv globalEnv) = fromJust $ MapL.lookup storedGlobalEnv store
 
 -- Accessing a variable pointer.
-step (PointerExpr (Var s), env, store, nextAddr, callS, kon) = step (Value $ lookupPointerVar s env store, env, store, nextAddr, callS, kon)
+step (PointerExpr (Var s _), env, store, nextAddr, callS, kon) = step (Value $ lookupPointerVar s env store, env, store, nextAddr, callS, kon)
 step (PointerExpr e1, env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, kon)
 
 -- Getting the address for an addressed variable.
-step (AddressExpr (Var s), env, store, nextAddr, callS, kon) = step (Value $ VRef $ lookupAddr s env, env, store, nextAddr, callS, kon)
-step (AddressExpr (GlobalVar s), env, store, nextAddr, callS, kon) = step (Value $ VRef $ lookupAddr s globalEnv, env, store, nextAddr, callS, kon)
+step (AddressExpr (Var s _) _, env, store, nextAddr, callS, kon) = step (Value $ VRef $ lookupAddr s env, env, store, nextAddr, callS, kon)
+step (AddressExpr (GlobalVar s _) _, env, store, nextAddr, callS, kon) = step (Value $ VRef $ lookupAddr s globalEnv, env, store, nextAddr, callS, kon)
     where (GlobalEnv globalEnv) = fromJust $ MapL.lookup storedGlobalEnv store
 
-step (AddressExpr e1, env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, AddressExprFrame:kon)
+step (AddressExpr e1 _, env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, AddressExprFrame:kon)
 step (Value e1, env, store, nextAddr, callS, AddressExprFrame:kon) = step (Value $ VRef $ nextAddr, env, store', nextAddr+1, callS, kon)
     where store' = updateStore store nextAddr e1
 
 
 -- Function blocks ({ Expr }), which must have a 'return' statement.
-step (FuncBlock e1, env, store, nextAddr, callS, kon) = do
+step (FuncBlock e1 _, env, store, nextAddr, callS, kon) = do
     (Value e2, env', store', nextAddr', callS, kon') <- step (e1, env, store, nextAddr, callS, FuncBlockFrame:[Done])
     case head kon' of
         (ThrownException _ _) -> return (Value e2, env', store', nextAddr', callS, kon')
         _ -> step (Value e2, env', store', nextAddr', callS, kon)
 
-step (Return e1, env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, ReturnFrame:kon)
+step (Return e1 _, env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, ReturnFrame:kon)
 step (Value e1, env, store, nextAddr, callS, FuncBlockFrame:kon) = return (Value VNone, env, store, nextAddr, callS, kon)
 
 -- Returning from a function.
 step (Value e1, env, store, nextAddr, callS, ReturnFrame:kon) = return (Value e1, env, store, nextAddr, callS, kon)
 
-step (TryCatch e1 ps e2, env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, (CatchFrame (evaluateCatchParams ps) e2 env callS):kon)
+step (TryCatch e1 ps e2 _, env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, (CatchFrame (evaluateCatchParams ps) e2 env callS):kon)
     where
         evaluateCatchParams :: Parameters -> [ExprValue]
         evaluateCatchParams FuncParamEnd = []
-        evaluateCatchParams (FuncParam (Var x) e2) = (lookupVar x env store) : evaluateCatchParams e2
+        evaluateCatchParams (FuncParam (Var x _) e2) = (lookupVar x env store) : evaluateCatchParams e2
 
 -- User-defined function calls.
-step (FuncCall s ps, env, store, nextAddr, callS, kon) = do
-    let newCallS = (FuncCall s ps):callS
-    evalArgs <- evaluateArgs ps env store nextAddr newCallS [] 
+step (FuncCall s ps l, env, store, nextAddr, callS, kon) = do
+    let newCallS = (FuncCall s ps l):callS
+    evalArgs <- evaluateArgs ps env store nextAddr newCallS []
 
     case evalArgs of
         (Right (args, env', store', nextAddr')) -> do
             (matchFunc, store'') <- handleFuncArgs args env' store' nextAddr' s -- Pattern match
 
             case matchFunc of
-                (Left ex) -> step (throwException (show ex), env, store, nextAddr, newCallS, kon)
+                (Left ex) -> step (throwException (show ex) l, env, store, nextAddr, newCallS, kon)
                 (Right (e1, env'', nextAddr'')) -> do
                     (Value e2, _, store''', _, _, funcKon) <- step (e1, env'', store'', nextAddr'', newCallS, ReturnFrame:[Done]) -- Recurse into function call.
 
@@ -259,41 +248,41 @@ step (FuncCall s ps, env, store, nextAddr, callS, kon) = do
 
 -- Built-in functions.
 -- List (pass-by-value) operations:
-step (BuiltInFunc "tail" [Var xs], env, store, nextAddr, callS, kon)
+step (BuiltInFunc "tail" [Var xs _], env, store, nextAddr, callS, kon)
     | length ys > 0 = return (Value $ VList t $ tail ys, env, store, nextAddr, callS, kon)
-    | otherwise = step (throwException "EmptyListException", env, store, nextAddr, callS, kon)
+    | otherwise = step (throwException "EmptyListException" (getFuncCallPos callS), env, store, nextAddr, callS, kon)
     where 
         (VList t ys) = lookupVar xs env store
 
-step (BuiltInFunc "head" [Var xs], env, store, nextAddr, callS, kon)
+step (BuiltInFunc "head" [Var xs _], env, store, nextAddr, callS, kon)
     | length ys > 0 = return (Value $ head ys, env, store, nextAddr, callS, kon)
-    | otherwise = step (throwException "EmptyListException", env, store, nextAddr, callS, kon)
+    | otherwise = step (throwException "EmptyListException" (getFuncCallPos callS), env, store, nextAddr, callS, kon)
     where 
         (VList t ys) = lookupVar xs env store
 
-step (BuiltInFunc "drop" [Var n, Var xs], env, store, nextAddr, callS, kon) 
-    | n' < 0 = step (throwException "InvalidParameterException", env, store, nextAddr, callS, kon)
-    | length ys < n' = step (throwException "IndexOutOfBoundException", env, store, nextAddr, callS, kon)
+step (BuiltInFunc "drop" [Var n _, Var xs _], env, store, nextAddr, callS, kon) 
+    | n' < 0 = step (throwException "InvalidParameterException" (getFuncCallPos callS), env, store, nextAddr, callS, kon)
+    | length ys < n' = step (throwException "IndexOutOfBoundException" (getFuncCallPos callS), env, store, nextAddr, callS, kon)
     | otherwise = return (Value $ VList t $ drop n' ys, env, store, nextAddr, callS, kon)
     where 
         (VList t ys) = lookupVar xs env store
         (VInt n') = lookupVar n env store
 
-step (BuiltInFunc "take" [Var n, Var xs], env, store, nextAddr, callS, kon) 
-    | n' < 0 = step (throwException "InvalidParameterException", env, store, nextAddr, callS, kon)
-    | length ys < n' = step (throwException "IndexOutOfBoundException", env, store, nextAddr, callS, kon)
+step (BuiltInFunc "take" [Var n _, Var xs _], env, store, nextAddr, callS, kon) 
+    | n' < 0 = step (throwException "InvalidParameterException" (getFuncCallPos callS), env, store, nextAddr, callS, kon)
+    | length ys < n' = step (throwException "IndexOutOfBoundException" (getFuncCallPos callS), env, store, nextAddr, callS, kon)
     | otherwise = return (Value $ VList t $ take n' ys, env, store, nextAddr, callS, kon)
     where 
         (VList t ys) = lookupVar xs env store
         (VInt n') = lookupVar n env store
 
-step (BuiltInFunc "length" [Var xs], env, store, nextAddr, callS, kon) = return (Value $ VInt $ length ys, env, store, nextAddr, callS, kon)
+step (BuiltInFunc "length" [Var xs _], env, store, nextAddr, callS, kon) = return (Value $ VInt $ length ys, env, store, nextAddr, callS, kon)
     where 
         (VList t ys) = lookupVar xs env store
 
-step (BuiltInFunc "get" [Var n, Var xs], env, store, nextAddr, callS, kon)
-    | n' < 0 = step (throwException "InvalidParameterException", env, store, nextAddr, callS, kon)
-    | n' >= length ys = step (throwException "IndexOutOfBoundException", env, store, nextAddr, callS, kon)
+step (BuiltInFunc "get" [Var n _, Var xs _], env, store, nextAddr, callS, kon)
+    | n' < 0 = step (throwException "InvalidParameterException" (getFuncCallPos callS), env, store, nextAddr, callS, kon)
+    | n' >= length ys = step (throwException "IndexOutOfBoundException" (getFuncCallPos callS), env, store, nextAddr, callS, kon)
     | otherwise = return (Value $ ys!!n', env, store, nextAddr, callS, kon)
     where 
         (VList t ys) = lookupVar xs env store
@@ -301,39 +290,39 @@ step (BuiltInFunc "get" [Var n, Var xs], env, store, nextAddr, callS, kon)
 
 
 -- List/Stream reference (pass-by-reference) operations:
-step (BuiltInFunc "pop" [Var p], env, store, nextAddr, callS, kon) = case v of
+step (BuiltInFunc "pop" [Var p _], env, store, nextAddr, callS, kon) = case v of
         Just (VList t xs) -> case (length xs > 0) of
             True  -> return (Value $ head xs, env, updateStore store r (VList t (tail xs)), nextAddr, callS, kon)
-            False -> step (throwException "EmptyListException", env, store, nextAddr, callS, kon)
+            False -> step (throwException "EmptyListException" (getFuncCallPos callS), env, store, nextAddr, callS, kon)
 
         Just (VStream i xs) -> do
             dropInp <- dropStreamInput (VStream i xs) 1 store
             case dropInp of
-                (Left ex) -> step (throwException (show ex), env, store, nextAddr, callS, kon)
+                (Left ex) -> step (throwException (show ex) (getFuncCallPos callS), env, store, nextAddr, callS, kon)
                 (Right (ys, store')) -> 
 
                     case ys of
                         [VInt n] -> return (Value $ VInt n, env, store', nextAddr, callS, kon)
-                        _        -> step (throwException "StreamOutOfInputException", env, store, nextAddr, callS, kon)
+                        _        -> step (throwException "StreamOutOfInputException" (getFuncCallPos callS), env, store, nextAddr, callS, kon)
 
     where 
         (VRef r) = lookupVar p env store
         v = MapL.lookup r store
 
-step (BuiltInFunc "popN" [Var n, Var p], env, store, nextAddr, callS, kon) = case v of
+step (BuiltInFunc "popN" [Var n _, Var p _], env, store, nextAddr, callS, kon) = case v of
         Just (VList t xs) -> case (length xs >= n') of
             True  -> return (Value $ VList t $ take n' xs, env, updateStore store r (VList t (drop n' xs)), nextAddr, callS, kon)
-            False -> step (throwException "EmptyListException", env, store, nextAddr, callS, kon)
+            False -> step (throwException "EmptyListException" (getFuncCallPos callS), env, store, nextAddr, callS, kon)
 
         Just (VStream i xs) -> do
             dropInp <- dropStreamInput (VStream i xs) n' store
 
             case dropInp of
-                (Left ex) -> step (throwException (show ex), env, store, nextAddr, callS, kon)
+                (Left ex) -> step (throwException (show ex) (getFuncCallPos callS), env, store, nextAddr, callS, kon)
                 (Right (ys, store')) -> 
 
                     case (ys == [] || VNone `elem` ys) of
-                        True  -> step (throwException "StreamOutOfInputException", env, store, nextAddr, callS, kon)
+                        True  -> step (throwException "StreamOutOfInputException" (getFuncCallPos callS), env, store, nextAddr, callS, kon)
                         False ->  return (Value $ VList (TList TInt) ys, env, store', nextAddr, callS, kon)
     
     where 
@@ -341,38 +330,38 @@ step (BuiltInFunc "popN" [Var n, Var p], env, store, nextAddr, callS, kon) = cas
         (VRef r) = lookupVar p env store
         v = MapL.lookup r store
 
-step (BuiltInFunc "peek" [Var p], env, store, nextAddr, callS, kon) = case v of
+step (BuiltInFunc "peek" [Var p _], env, store, nextAddr, callS, kon) = case v of
         Just (VList t xs) -> case (length xs > 0) of
             True  -> return (Value $ head xs, env, store, nextAddr, callS, kon)
-            False -> step (throwException "EmptyListException", env, store, nextAddr, callS, kon)
+            False -> step (throwException "EmptyListException" (getFuncCallPos callS), env, store, nextAddr, callS, kon)
 
         Just (VStream i xs) -> do
             peekInp <- peekStreamInput (VStream i xs) 1 store
             case peekInp of
-                (Left ex) -> step (throwException (show ex), env, store, nextAddr, callS, kon)
+                (Left ex) -> step (throwException (show ex) (getFuncCallPos callS), env, store, nextAddr, callS, kon)
                 (Right (ys, store')) -> 
 
                     case ys of
                         [VInt n] -> return (Value $ VInt n, env, store', nextAddr, callS, kon)
-                        _        -> step (throwException "StreamOutOfInputException", env, store, nextAddr, callS, kon)
+                        _        -> step (throwException "StreamOutOfInputException" (getFuncCallPos callS), env, store, nextAddr, callS, kon)
 
     where 
         (VRef r) = lookupVar p env store
         v = MapL.lookup r store
 
-step (BuiltInFunc "peekN" [Var n, Var p], env, store, nextAddr, callS, kon) = case v of
+step (BuiltInFunc "peekN" [Var n _, Var p _], env, store, nextAddr, callS, kon) = case v of
         Just (VList t xs) -> case (length xs >= n') of
                 True  -> return (Value $ VList t $ take n' xs, env, updateStore store r (VList t xs), nextAddr, callS, kon)
-                False -> step (throwException "IndexOutOfBoundException", env, store, nextAddr, callS, kon)
+                False -> step (throwException "IndexOutOfBoundException" (getFuncCallPos callS), env, store, nextAddr, callS, kon)
 
         Just (VStream i xs) -> do
             peekInp <- peekStreamInput (VStream i xs) n' store
             case peekInp of
-                (Left ex) -> step (throwException (show ex), env, store, nextAddr, callS, kon)
+                (Left ex) -> step (throwException (show ex) (getFuncCallPos callS), env, store, nextAddr, callS, kon)
                 (Right (ys, store')) ->
                     
                     case (ys == [] || VNone `elem` ys) of
-                        True  -> step (throwException "StreamOutOfInputException", env, store, nextAddr, callS, kon)
+                        True  -> step (throwException "StreamOutOfInputException" (getFuncCallPos callS), env, store, nextAddr, callS, kon)
                         False ->  return (Value $ VList (TList TInt) ys, env, store', nextAddr, callS, kon)
     
     where 
@@ -380,26 +369,26 @@ step (BuiltInFunc "peekN" [Var n, Var p], env, store, nextAddr, callS, kon) = ca
         (VRef r) = lookupVar p env store
         v = MapL.lookup r store
 
-step (BuiltInFunc "isEmpty" [Var p], env, store, nextAddr, callS, kon) = case v of
+step (BuiltInFunc "isEmpty" [Var p _], env, store, nextAddr, callS, kon) = case v of
         Just (VList t xs) -> return (Value $ VBool (length xs == 0), env, store, nextAddr, callS, kon)
 
         Just (VStream i xs) -> do
             peekInp <- peekStreamInput (VStream i xs) 1 store
             case peekInp of
-                (Left ex) -> step (throwException (show ex), env, store, nextAddr, callS, kon)
+                (Left ex) -> step (throwException (show ex) (getFuncCallPos callS), env, store, nextAddr, callS, kon)
                 (Right (ys, store')) -> return (Value $ VBool (length ys == 0 || VNone `elem` ys), env, store', nextAddr, callS, kon)
 
     where 
         (VRef r) = lookupVar p env store
         v = MapL.lookup r store
 
-step (BuiltInFunc "hasElems" [Var n, Var p], env, store, nextAddr, callS, kon) = case v of
+step (BuiltInFunc "hasElems" [Var n _, Var p _], env, store, nextAddr, callS, kon) = case v of
         Just (VList t xs) -> return (Value $ VBool (length xs >= n'), env, store, nextAddr, callS, kon)
 
         Just (VStream i xs) -> do
             peekInp <- peekStreamInput (VStream i xs) n' store
             case peekInp of
-                (Left ex) -> step (throwException (show ex), env, store, nextAddr, callS, kon)
+                (Left ex) -> step (throwException (show ex) (getFuncCallPos callS), env, store, nextAddr, callS, kon)
                 (Right (ys, store')) -> return (Value $ VBool (length ys >= n' && not (VNone `elem` ys)), env, store', nextAddr, callS, kon)
 
     where 
@@ -408,20 +397,20 @@ step (BuiltInFunc "hasElems" [Var n, Var p], env, store, nextAddr, callS, kon) =
         v = MapL.lookup r store
 
 -- IO Operations:
-step (BuiltInFunc "out" [Var a], env, store, nextAddr, callS, kon) = do
+step (BuiltInFunc "out" [Var a _], env, store, nextAddr, callS, kon) = do
     putStrLn $ (show v)
     return (Value VNone, env, store, nextAddr, callS, kon)
         where 
             v = (lookupVar a env store)
 
-step (BuiltInFunc "in" [Var n], env, store, nextAddr, callS, kon) = return (Value $ VRef $ -n', env, store', nextAddr, callS, kon)
+step (BuiltInFunc "in" [Var n _], env, store, nextAddr, callS, kon) = return (Value $ VRef $ -n', env, store', nextAddr, callS, kon)
     where 
         (VInt n') = (lookupVar n env store)
         store' = case MapL.lookup (-n') store of
                 Just (VStream i xs) -> store
                 Nothing -> updateStore store (-n') (VStream n' [])
 
-step (BuiltInFunc "setIn" [Var xs], env, store, nextAddr, callS, kon) = return (Value VNone, env, store', nextAddr, callS, kon)
+step (BuiltInFunc "setIn" [Var xs _], env, store, nextAddr, callS, kon) = return (Value VNone, env, store', nextAddr, callS, kon)
     where 
         (VList t ys) = lookupVar xs env store
         store' = MapL.insert (inputStreamsToRead) (VList t (sort ys)) $ 
@@ -431,16 +420,16 @@ step (BuiltInFunc "setIn" [Var xs], env, store, nextAddr, callS, kon) = return (
                         ) store ys
 
 -- Exception operations:
-step (BuiltInFunc "throw" [Var e], env, store, nextAddr, callS, kon) = return (Value VNone, env, store, nextAddr, callS, (ThrownException v callS):kon)
+step (BuiltInFunc "throw" [Var e _], env, store, nextAddr, callS, kon) = return (Value VNone, env, store, nextAddr, callS, (ThrownException v callS):kon)
     where
         v = (lookupVar e env store)
 
 -- Boolean not operation.
-step (BooleanNotExpr e1, env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, (BoolNotFrame):kon)
+step (BooleanNotExpr e1 _, env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, (BoolNotFrame):kon)
 step (Value (VBool b), env, store, nextAddr, callS, (BoolNotFrame):kon) = step (Value $ VBool $ not b, env, store, nextAddr, callS, kon)
 
 -- Math binary operations.
-step (Op (MathOp op e1 e2), env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, (HBinOp $ BinMathOp op e2 env):kon)
+step (Op (MathOp op e1 e2) _, env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, (HBinOp $ BinMathOp op e2 env):kon)
 step (Value e1, env, store, nextAddr, callS, (HBinOp (BinMathOp op e2 env')):kon) = step (e2, env', store, nextAddr, callS, (BinOpH $ BinMathOp op (Value e1) env):kon)
 
 step (Value (VInt n'), env', store, nextAddr, callS, (BinOpH (BinMathOp op (Value (VInt n)) env)):kon) = step (Value $ VInt r, env, store, nextAddr, callS, kon)
@@ -453,9 +442,7 @@ step (Value (VInt n'), env', store, nextAddr, callS, (BinOpH (BinMathOp op (Valu
                     Mod -> n `mod` n'
 
 -- Adding 2 lists together.
-step (Value (VList t' n'), env', store, nextAddr, callS, (BinOpH (BinMathOp Plus (Value (VList t n)) env)):kon)
-    | newT /= TConflict = step (Value $ VList newT (n ++ n'), env, store, nextAddr, callS, kon)
-    | otherwise = error $ "Type error \n" ++ (show $ Value (VList t n)) ++ "\n" ++(show Plus)++ "\n" ++(show $ Value (VList t' n'))
+step (Value (VList t' n'), env', store, nextAddr, callS, (BinOpH (BinMathOp Plus (Value (VList t n)) env)):kon) = step (Value $ VList newT (n ++ n'), env, store, nextAddr, callS, kon)
     where
         newT = joinListTypes t t'
 
@@ -480,56 +467,28 @@ step (Value (VList t' n'), env', store, nextAddr, callS, (BinOpH (BinMathOp Plus
 
 
 -- Binary comparison operations.
-step (Op (CompOp op e1 e2), env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, (HBinOp $ BinCompOp op e2 env):kon)
+step (Op (CompOp op e1 e2) _, env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, (HBinOp $ BinCompOp op e2 env):kon)
 step (Value e1, env, store, nextAddr, callS, (HBinOp (BinCompOp op e2 env')):kon) = step (e2, env', store, nextAddr, callS, (BinOpH $ BinCompOp op (Value e1) env):kon)
 
 -- Boolean &&, || operations.
 step (Value (VBool b'), env', store, nextAddr, callS, (BinOpH (BinCompOp And (Value (VBool b)) env)):kon)
     | b' = step (Value $ VBool $ b && b', env, store, nextAddr, callS, kon)
     | otherwise = step (Value $ VBool False, env, store, nextAddr, callS, kon)
-step (Value e2, env', store, nextAddr, callS, (BinOpH (BinCompOp And (Value e1) env)):kon) = error $ "Type error \n" ++ (show $ Value e1)++"\n"++(show And)++"\n"++(show $ Value e2) ++"\nBoolean"
 
 step (Value (VBool b'), env', store, nextAddr, callS, (BinOpH (BinCompOp Or (Value (VBool b)) env)):kon) 
     | b' = step (Value $ VBool True, env, store, nextAddr, callS, kon)
     | otherwise = step (Value $ VBool $ b || b', env, store, nextAddr, callS, kon)
-step (Value e2, env', store, nextAddr, callS, (BinOpH (BinCompOp Or (Value e1) env)):kon) = error $ "Type error \n" ++ (show $ Value e1)++"\n"++(show Or)++"\n"++(show $ Value e2) ++"\nBoolean"
 
 -- Comparison <, >, == operations.
-step (Value e1, env', store, nextAddr, callS, (BinOpH (BinCompOp LessThan (Value e2) env)):kon) 
-    | isChildOf [] t1 ([], COrd) && isChildOf [] t2 ([], COrd) && t1 == t2 = step (Value $ VBool $ e2 < e1, env, store, nextAddr, callS, kon)
-    | otherwise = error $ "Type error \n" ++ (show $ Value e1)++"\n"++(show LessThan)++"\n"++(show $ Value e2) ++"\nInteger"
-    where
-        t1 = getType store e1
-        t2 = getType store e2
-
-step (Value e1, env', store, nextAddr, callS, (BinOpH (BinCompOp GreaterThan (Value e2) env)):kon) 
-    | isChildOf [] t1 ([], COrd) && isChildOf [] t2 ([], COrd) && t1 == t2 = step (Value $ VBool $ e1 > e2, env, store, nextAddr, callS, kon)
-    | otherwise = error $ "Type error \n" ++ (show $ Value e1)++"\n"++(show GreaterThan)++"\n"++(show $ Value e2) ++"\nInteger"
-    where
-        t1 = getType store e1
-        t2 = getType store e2
-
-step (Value e2, env', store, nextAddr, callS, (BinOpH (BinCompOp Equality (Value e1) env)):kon)
-    | isChildOf [] t1 ([], CEq) && isChildOf [] t2 ([], CEq) && t1 == t2 = step (Value $ VBool $ e1 == e2, env, store, nextAddr, callS, kon)
-    | otherwise = error $ "Type error \n" ++ (show $ Value e1)++"\n"++(show Equality)++"\n"++(show $ Value e2)
-    where
-        t1 = getType store e1
-        t2 = getType store e2
-
-step (Value e2, env', store, nextAddr, callS, (BinOpH (BinCompOp NotEquals (Value e1) env)):kon)
-    | isChildOf [] t1 ([], CEq) && isChildOf [] t2 ([], CEq) && t1 == t2 = step (Value $ VBool $ e1 /= e2, env, store, nextAddr, callS, kon)
-    | otherwise = error $ "Type error \n" ++ (show $ Value e1)++"\n"++(show NotEquals)++"\n"++(show $ Value e2)
-    where
-        t1 = getType store e1
-        t2 = getType store e2
-
+step (Value e2, env', store, nextAddr, callS, (BinOpH (BinCompOp LessThan (Value e1) env)):kon) = step (Value $ VBool $ e1 < e2, env, store, nextAddr, callS, kon)
+step (Value e2, env', store, nextAddr, callS, (BinOpH (BinCompOp GreaterThan (Value e1) env)):kon) = step (Value $ VBool $ e1 > e2, env, store, nextAddr, callS, kon)
+step (Value e2, env', store, nextAddr, callS, (BinOpH (BinCompOp Equality (Value e1) env)):kon) = step (Value $ VBool $ e1 == e2, env, store, nextAddr, callS, kon)
+step (Value e2, env', store, nextAddr, callS, (BinOpH (BinCompOp NotEquals (Value e1) env)):kon) = step (Value $ VBool $ e1 /= e2, env, store, nextAddr, callS, kon)
 
 -- Cons operation.
-step (Op (Cons e1 e2), env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, (HBinOp $ BinConsOp e2 env):kon)
+step (Op (Cons e1 e2) _, env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, (HBinOp $ BinConsOp e2 env):kon)
 step (Value e1, env, store, nextAddr, callS, (HBinOp (BinConsOp e2 env')):kon) = step (e2, env', store, nextAddr, callS, (BinOpH (BinConsOp (Value e1) env')):kon)
-step (Value (VList t xs), env, store, nextAddr, callS, (BinOpH (BinConsOp (Value e1) env')):kon)
-    | t' /= TConflict = step (Value (VList t' (e1:xs)), env', store, nextAddr, callS, kon)
-    | otherwise = error $ "Type conflict trying to cons " ++ (show e1) ++ " to VList " ++ (show xs)
+step (Value (VList t xs), env, store, nextAddr, callS, (BinOpH (BinConsOp (Value e1) env')):kon) = step (Value (VList t' (e1:xs)), env', store, nextAddr, callS, kon)
     where 
         t' = consTypes (getType store e1) t
 
@@ -551,17 +510,17 @@ step (Value (VList t xs), env, store, nextAddr, callS, (BinOpH (BinConsOp (Value
 
 
 -- if-elif-else statement.
-step (If c e1 e2, env, store, nextAddr, callS, kon) = step (c, env, store, nextAddr, callS, (HTerOp $ TerIfOp e1 e2):kon)
+step (If c e1 e2 _, env, store, nextAddr, callS, kon) = step (c, env, store, nextAddr, callS, (HTerOp $ TerIfOp e1 e2):kon)
 step (Value (VBool b), env, store, nextAddr, callS, (HTerOp (TerIfOp e1 e2)):kon)
     | b = step (e1, env, store, nextAddr, callS, kon)
     | otherwise = step $ helper e2
     where helper Nothing = (Value VNone, env, store, nextAddr, callS, kon)
           helper (Just (Else e)) = (e, env, store, nextAddr, callS, kon)
-          helper (Just (Elif c' e1' e2')) = (If c' e1' e2', env, store, nextAddr, callS, kon)
+          helper (Just (Elif c' e1' e2' l)) = (If c' e1' e2' l, env, store, nextAddr, callS, kon)
 
 
 -- While loop.
-step (While c e1, env, store, nextAddr, callS, kon) = step (c, env, store, nextAddr, callS, (HTerOp $ TerWhileOp c e1):kon)
+step (While c e1 _, env, store, nextAddr, callS, kon) = step (c, env, store, nextAddr, callS, (HTerOp $ TerWhileOp c e1):kon)
 step (Value (VBool b), env, store, nextAddr, callS, (HTerOp (TerWhileOp c e1)):kon)
     | b = step (e1, env, store, nextAddr, callS, (TerOpH $ TerWhileOp c e1):kon)
     | otherwise = step (Value VNone, env, store, nextAddr, callS, kon)
@@ -569,7 +528,7 @@ step (Value v, env, store, nextAddr, callS, (TerOpH (TerWhileOp c e1)):kon) = st
 
 
 -- For loop.
-step (For i c n e, env, store, nextAddr, callS, kon) = step (i, env, store, nextAddr, callS, (HTerOp (TerForInit i c n e)):kon)
+step (For i c n e _, env, store, nextAddr, callS, kon) = step (i, env, store, nextAddr, callS, (HTerOp (TerForInit i c n e)):kon)
 step (Value _, env, store, nextAddr, callS, (HTerOp (TerForInit i c n e)):kon) = step (c, env, store, nextAddr, callS, (HTerOp (TerForOp c n e)):kon) -- Initialised vars.
 step (Value (VBool b), env, store, nextAddr, callS, (HTerOp (TerForOp c n e)):kon) -- Evaluated condition.
     | b = step (e, env, store, nextAddr, callS, (TerOp_H (TerForOp c n e)):kon)
@@ -585,7 +544,9 @@ step (e, env, store, a, _, (CatchFrame _ _ _ callS):kon) = step (e, env, store, 
 step s@(_, _, _, _, _, [Done]) = return s
 
 -- No defined step for the current State.
-step s@(exp, env, store, nextAddr, callS, kon) = error $ "ERROR evaluating expression " ++ (show s) ++ ", no CESK step defined."
+step s@(exp, env, store, nextAddr, callS, kon) = do
+    printStdErr $ "ERROR in evaluation. This expression could not be evaluated: " ++ (show exp)
+    exitFailure
 
 
 -- Pattern matches a function parameters with some given arguments, returning the functions Expr value, as well as updated Env, Store, and next Address.
@@ -593,9 +554,8 @@ step s@(exp, env, store, nextAddr, callS, kon) = error $ "ERROR evaluating expre
 handleFuncArgs :: [ExprValue] -> Environment -> Store -> Address -> String -> IO (Either Exception (Expr, Environment, Address), Store)
 handleFuncArgs args env store nextAddr s = do
     let fv@(VFunc (TFunc ts _ cs) _) = (lookupVar s env store)
-
-            
     (matchFunc, store') <- matchArgsToFunc store args fv
+
     case matchFunc of
         (Left ex) -> return (Left ex, store')
         (Right (e1, xs)) -> do
@@ -935,28 +895,24 @@ updateEnvStore env store nextAddr s e1 = (env', updateStore store addr e1, if lo
     where 
         lookupInEnv = Map.lookup s env
         (env', addr) = case lookupInEnv of
-                Just (a) -> (env, a)
-                Nothing -> addToEnv env store nextAddr s
+            Just (a) -> (env, a)
+            Nothing -> addToEnv env store nextAddr s
 
 -- Adds a new String to the Environment, and returns a tuple of the new Environment and the created Address.
 -- Assumes the String is not in the Environment.
 addToEnv :: Environment -> Store -> Address -> String -> (Environment, Address)
 addToEnv env store nextAddr s = (Map.insert s addr env, addr)
-    where addr = case Map.lookup s env of 
-                        Just (a) -> a
-                        Nothing -> nextAddr
+    where 
+        addr = case Map.lookup s env of 
+            Just (a) -> a
+            Nothing -> nextAddr
 
 -- Updates an Address mapping in the store.
 -- If the inputted Address is not in the store, then it will be inserted.
 updateStore :: Store -> Address -> ExprValue -> Store
 updateStore store a e@(VFunc ft []) = MapL.insert a e store
-updateStore store a (VFuncUnTypedDef xs) = MapL.update (\x -> Just (VFunc (TFunc ts out cs) (ys ++ xs))) a store
-    where (Just (VFunc (TFunc ts out cs) ys)) = MapL.lookup a store
-
-updateStore store a e1
-    | item == Nothing = MapL.insert a e1 store
-    | otherwise = MapL.update (\x -> Just e1) a store
-    where item = MapL.lookup a store
+updateStore store a (VFuncUnTypedDef xs) = MapL.update (\(VFunc (TFunc ts out cs) ys) -> Just (VFunc (TFunc ts out cs) (ys++xs))) a store
+updateStore store a e = MapL.insert a e store
 
 -- Takes in stream num, num of values to get from the buffer, and the current store.
 -- Returns updated store and list of values retrieved.
@@ -1007,11 +963,10 @@ updateStreams n store = do
                 [] -> case ks of
                     [] -> return $ Right $ helper 0 store
                     _ -> return $ Right $ foldl (\store' k -> MapL.update (\(VStream i ys) -> Just (VStream i (ys++[VNone]))) (-k) store') store ks
-                _ -> case ks of 
+                _ -> case ks of
                     [] -> return $ Right $ fst $ foldl (\(store', c) xs -> case MapL.lookup c store' of
                                                 Just (VStream i ys) -> (MapL.update (\x -> Just (VStream i (ys++xs))) c store', c-1)
                                                 Nothing -> (MapL.insert c (VStream (abs c) xs) store', c-1)
-                                                _ -> error "Should be a VStream in negative Store addresses."
                                 ) (store, 0) xss
                     _ -> case (length xss)-1 < (last ks) of
                         False -> return $ Right $ foldl (\store' k -> MapL.update (\(VStream i ys) -> Just (VStream i (ys++(xss!!k)))) (-k) store') store ks
@@ -1073,13 +1028,17 @@ readInput xss n = do
                 res = (reads y) :: [(Int, String)]
 
 -- Generates a function call for throwing an exception s.
-throwException :: String -> Expr
-throwException s = FuncCall "throw" (FuncParam (Var s) FuncParamEnd)
+throwException :: String -> Pos -> Expr
+throwException s l = FuncCall "throw" (FuncParam (Var s (0,0)) FuncParamEnd) l
 
 showException :: ExprValue -> CallStack -> String
 showException ex exCallS = (show ex) ++ " in evaluation:" ++ showCS exCallS
     where
         showCS [] = ""
         showCS (c:cs) = "\n\tIn " ++ case c of
-            (FuncCall s ps) -> "function call " ++ (show c) ++ (showCS cs)
+            (FuncCall s ps l) -> "function call " ++ (show c) ++ (printPos l) ++ (showCS cs) 
             _ -> (show c) ++ (showCS cs)
+
+getFuncCallPos :: CallStack -> Pos
+getFuncCallPos [] = (0,0)
+getFuncCallPos ((FuncCall _ _ l):_) = l
