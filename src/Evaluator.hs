@@ -41,7 +41,7 @@ insertReserved env store = helper ls env (MapL.insert storedGlobalEnv (GlobalEnv
                     (TFunc [TInt, TList $ TGeneric "a"] (TGeneric "a") []) 
                     [([VVar "n", VVar "xs"], BuiltInFunc "get" [Var "n" (0,0), Var "xs" (0,0)])])),
                 ("out", (VFunc 
-                    (TFunc [TGeneric "a"] (TNone) []) 
+                    (TFunc [TGeneric "a"] (TNone) [("a", CPrintable)])
                     [([VVar "v"], BuiltInFunc "out" [Var "v"(0,0)])])),
                 ("in", (VFunc 
                     (TFunc [TInt] (TRef $ TStream) []) 
@@ -826,6 +826,13 @@ isChildOf tc (TGeneric a) (s, COrd)
     | otherwise = False
     where t = lookup a tc
 isChildOf tc _ (s, COrd) = False
+
+-- Print class.
+isChildOf tc TInt (s, CPrintable) = True
+isChildOf tc (TList TInt) (s, CPrintable) = True
+isChildOf tc (TList TEmpty) (s, CPrintable) = True
+isChildOf tc _ (s, CPrintable) = False
+
 
 -- Build a function type.
 evaluateFuncType :: Expr -> Type 

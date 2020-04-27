@@ -70,6 +70,7 @@ import Expression
     cEq       {TokenTypeConstraintEq _ }
     cItr      {TokenTypeConstraintItr _ }
     cOrd      {TokenTypeConstraintOrd _ }
+    cPrintable {TokenTypeConstraintPrintable _ }
     '~'       {TokenTypeConstraintTwiddle _ }
 
     int       { TokenInt $$ _ }
@@ -149,6 +150,7 @@ PC : TC ',' PC                              { FuncParam $1 $3 }
 TC : cEq var                                { TypeConstraint CEq (fst $2) }
    | cItr var                               { TypeConstraint CItr (fst $2) }
    | cOrd var                               { TypeConstraint COrd (fst $2) }
+   | cPrintable var                         { TypeConstraint CPrintable (fst $2) }
 
 V : global GV                               { GlobalAssign $2 }
   | GV                                      { LocalAssign $1 }

@@ -226,6 +226,7 @@ data Assignment = DefVar String Expr Pos
 data TypeClass = CEq
                | CItr
                | COrd
+               | CPrintable
                deriving (Eq, Ord, Show)
 
 data Expr = If Expr Expr (Maybe ExprElif) Pos

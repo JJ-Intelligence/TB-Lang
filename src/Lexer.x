@@ -72,6 +72,7 @@ tokens :-
     Eq                                  { \p _ -> TokenTypeConstraintEq (toPos p) }
     Itr                                 { \p _ -> TokenTypeConstraintItr (toPos p) }
     Ord                                 { \p _ -> TokenTypeConstraintOrd (toPos p) }
+    Printable                           { \p _ -> TokenTypeConstraintPrintable (toPos p) }
     \~                                  { \p _ -> TokenTypeConstraintTwiddle (toPos p) }
 
     $digit+                             { \p s -> TokenInt (read s) (toPos p) }
@@ -147,7 +148,9 @@ data Token =  TokenIf                           { pos :: Pos }
             | TokenTypeConstraintEq             { pos :: Pos }
             | TokenTypeConstraintItr            { pos :: Pos }
             | TokenTypeConstraintOrd            { pos :: Pos }
+            | TokenTypeConstraintPrintable      { pos :: Pos }
             | TokenTypeConstraintTwiddle        { pos :: Pos }
+
 
             | TokenInt                          { int :: Int, pos :: Pos }
             | TokenBool                         { bool :: Bool, pos :: Pos }

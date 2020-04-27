@@ -21,7 +21,7 @@ insertBuiltIn local = foldr (\(s,t) acc -> Map.insert s [t] acc) local ls
             ("take", TFunc [TInt, TList $ TGeneric "a"] (TList $ TGeneric "a") []),
             ("length", TFunc [TList $ TGeneric "a"] (TInt) []),
             ("get", TFunc [TInt, TList $ TGeneric "a"] (TGeneric "a") []),
-            ("out", TFunc [TGeneric "a"] (TNone) []),
+            ("out", TFunc [TGeneric "a"] (TNone) [("a", CPrintable)]),
             ("in", TFunc [TInt] (TRef $ TStream) []),
             ("setIn", TFunc [TList $ TInt] (TNone) []),
             ("pop", TFunc [TRef $ TIterable $ TGeneric "a"] (TGeneric "a") []),
