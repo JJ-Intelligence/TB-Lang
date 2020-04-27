@@ -102,7 +102,7 @@ step (Seq e1 e2, env, store, nextAddr, callS, kon) = step (e1, env, store, nextA
 step (Value e1, env, store, nextAddr, callS, (HBinOp (BinSeqOp e2)):kon) = step (e2, env, store, nextAddr, callS, kon)
 
 -- Defining the type of a new function.
-step (LocalAssign (DefVar s (FuncType ps out cs) _), env, store, nextAddr, callS, kon) = step (Value VNone, env', store', nextAddr', callS, kon)
+step (LocalAssign (DefVar s (ExprType (FuncType ps out cs)) _), env, store, nextAddr, callS, kon) = step (Value VNone, env', store', nextAddr', callS, kon)
     where
         (env', store', nextAddr') = updateEnvStore env store nextAddr s (VFunc ft [])
         ft = evaluateFuncType (FuncType ps out cs)
@@ -166,7 +166,7 @@ step (GlobalVar s _, env, store, nextAddr, callS, kon) = step (Value $ lookupVar
     where (GlobalEnv globalEnv) = fromJust $ MapL.lookup storedGlobalEnv store
 
 -- Accessing a variable pointer.
-step (PointerExpr (Var s _), env, store, nextAddr, callS, kon) = step (Value $ lookupPointerVar s env store, env, store, nextAddr, callS, kon)
+step (PointerExpr (Var s _), env, store, nextAddr, callS, kon) = step (Value $ fromJust $ lookupPointerVar s env store, env, store, nextAddr, callS, kon)
 step (PointerExpr e1, env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, kon)
 
 -- Getting the address for an addressed variable.
@@ -779,17 +779,17 @@ isChildOf tc (TGeneric a) (s, COrd)
 isChildOf tc _ (s, COrd) = False
 
 -- Build a function type.
-evaluateFuncType :: Expr -> Type 
+evaluateFuncType :: Type -> Type 
 evaluateFuncType (FuncType ps out cs) = buildTFunc ps out cs
     where
         buildTFunc ps out cs = TFunc (evaluateParams ps) (evaluateOut out) (if cs == Nothing then [] else evaluateConstraints $ fromJust cs)
 
         evaluateParams FuncParamEnd = []
-        evaluateParams (FuncParam (FuncType ps' out' cs') e3) = buildTFunc ps' out' cs' : evaluateParams e3
+        evaluateParams (FuncParam (ExprType (FuncType ps' out' cs')) e3) = buildTFunc ps' out' cs' : evaluateParams e3
         evaluateParams (FuncParam (ExprType t) e3) = t : evaluateParams e3
 
+        evaluateOut (ExprType (FuncType ps' out' cs')) = buildTFunc ps' out' cs'
         evaluateOut (ExprType t) = t
-        evaluateOut (FuncType ps' out' cs') = buildTFunc ps' out' cs'
 
         evaluateConstraints FuncParamEnd = []
         evaluateConstraints (FuncParam (TypeConstraint cl g) e3) = (g, cl) : evaluateConstraints e3
@@ -810,10 +810,10 @@ lookupVar s env store
           globalAddr = Map.lookup s globalEnv
           (GlobalEnv globalEnv) = fromJust $ MapL.lookup storedGlobalEnv store
 
-lookupPointerVar :: String -> Environment -> Store -> ExprValue
+lookupPointerVar :: String -> Environment -> Store -> Maybe ExprValue
 lookupPointerVar s env store
-    | (isTRef $ getType store val) = fromJust $ MapL.lookup r store
-    | otherwise = error "Error, variable is not a pointer!"
+    | (isTRef $ getType store val) = MapL.lookup r store
+    | otherwise = Nothing
     where val = lookupVar s env store
           (VRef r) = val
 

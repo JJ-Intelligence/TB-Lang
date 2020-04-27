@@ -131,10 +131,10 @@ process (FuncBlock e1 l) (global, local, (ft, tc)) = do
 
 
 -- Declaring a function type.
-process (LocalAssign (DefVar s (FuncType ps out cs) l)) (global, local, ft) = do
+process (LocalAssign (DefVar s (ExprType (FuncType ps out cs)) l)) (global, local, ft) = do
     case (Map.lookup s local) of
         Just ([TFunc ps' out' cs'])  -> do
-            printStdErr ("Type ERROR: In function type definition \'" ++ (show $ LocalAssign (DefVar s (FuncType ps out cs) l)) ++ "\'"  ++ (printPos l)
+            printStdErr ("Type ERROR: In function type definition \'" ++ (show $ LocalAssign (DefVar s (ExprType (FuncType ps out cs)) l)) ++ "\'"  ++ (printPos l)
                 ++"\nThe functions type has already been declared as: " ++ (show (TFunc ps' out' cs')))
             exitFailure
         _ -> do
@@ -221,6 +221,59 @@ process (GlobalAssign (DefVar s e1 _)) state@(global, local, (ft, _)) = do
         True -> return (t', (global', Map.insert s t' local', ft'))
         False -> return (t', (Map.insert s t' global', local', ft'))
 
+process (DefPointerVar s e1) (global, local, ft) = do
+    let t = lookupT s (global, local)
+    if t == Nothing then do
+        printStdErr ("Access ERROR: In variable access for \'" ++ (show (DefPointerVar s e1)) ++ "\'"
+            ++ "\nPointer variable " ++ s ++ " has not been declared yet")
+        exitFailure
+    else 
+        return ()
+
+    if length (fromJust t) /= 1 then do
+        printStdErr ("Access ERROR: In variable access for \'" ++ (show (DefPointerVar s e1)) ++ "\'"
+            ++ "\nPointer variable has ambiguous types: " ++ (show $ head $ fromJust t) ++ (foldr (\t' acc -> ", " ++ (show t') ++ acc) "" (tail $ fromJust t)))
+        exitFailure
+    else
+        return ()
+
+    if (isNotRef $ head $ fromJust t) then do
+        printStdErr ("Access ERROR: In pointer variable access \'" ++ (show (DefPointerVar s e1)) ++ "\'"
+            ++ "\nVariable " ++ s ++ " has type "++(show $ head $ fromJust t)++", but it should be a reference")
+        exitFailure
+    else
+        return ()
+
+    (t', (global', local', ft')) <- process e1 (global, local, ft)
+
+    if length (fromJust t) /= 1 then do
+        printStdErr ("Access ERROR: In variable assignment for \'" ++ (show (DefPointerVar s e1)) ++ "\'"
+            ++ "\nExpression e1 has ambiguous types: " ++ (show $ head t') ++ (foldr (\t' acc -> ", " ++ (show t') ++ acc) "" (tail t')))
+        exitFailure
+    else
+        return ()
+
+    return (t', (global', Map.insert s ([TRef $ head $ t']) local', ft'))
+
+    where
+        isNotRef (TRef _) = False
+        isNotRef _ = True
+
+process (PointerExpr e1) (global, local, ft) = do
+    (t, (global', local', ft')) <- process e1 (global, local, ft)
+    if length t /= 1 then do
+        printStdErr ("Type ERROR: In pointer expression \'" ++ (show (PointerExpr e1)) ++ "\'"
+            ++ "\nPointed expression has ambiguous types: " ++ (show $ head t) ++ (foldr (\t' acc -> ", " ++ (show t') ++ acc) "" (tail t)))
+        exitFailure
+    else
+        return ()
+
+    case head t of
+        (TRef t') -> return ([t'], (global', local', ft'))
+        t' -> do
+            printStdErr ("Type ERROR: In pointer expression \'" ++ (show (PointerExpr e1)) ++ "\'"
+                ++ "\nPointed expression \'"++(show e1)++"\' has type " ++ (show t') ++ ", but it should be a reference")
+            exitFailure
 
 process (Var s l) state@(global, local, ft) = do
     let t = (lookupT s (global, local))
@@ -262,7 +315,6 @@ process (TryCatch e1 ps e2 l) (global, local, ft) = do
     (t', (global', local', ft')) <- process e1 (global, local, ft)
     (t', (global', local', ft')) <- process e2 (global, local, ft)
     return ([TNone], (global', local', ft'))
-
 
     where
         paramsToList :: Parameters -> [Expr]
@@ -704,7 +756,7 @@ putFuncParamsInStore tc (t:ts) (FuncParam e1 e2) local es
         getLitType (Literal (EBool _)) = Just TBool
         getLitType (Literal Empty) = Just $ TList TEmpty
         getLitType (Literal ENone) = Just TNone
-        getLitType (FuncType ps out cs) = Just $ evaluateFuncType (FuncType ps out cs)
+        getLitType (ExprType (FuncType ps out cs)) = Just $ evaluateFuncType (FuncType ps out cs)
         getLitType _ = Nothing
 
 

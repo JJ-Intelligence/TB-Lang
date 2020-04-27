@@ -80,8 +80,8 @@ import Expression
     var       { TokenVar $$ }
 
 %right ';'
-%right '->' -- unsure about this
-%left '~' -- unsure about this
+%right '->'
+%left '~'
 %left '=' '+=' '-=' '*=' '/=' '^=' '&=' '|='
 %right ':'
 %left or
@@ -92,6 +92,7 @@ import Expression
 %left NEG
 %right '^' 
 %right POINT '&' '!'
+
 %%
 
 E : E ';' E                                 { Seq $1 $3 }
@@ -111,8 +112,10 @@ E : E ';' E                                 { Seq $1 $3 }
   | var '--'                                { FuncBlock (Seq (LocalAssign $ DefVar (fst $1) (Op (MathOp Min (Var (fst $1) (snd $1)) (Literal $ EInt 1)) (snd $1)) (snd $1)) (Return (Op (MathOp Plus (Var (fst $1) (snd $1)) (Literal $ EInt 1)) (snd $1)) (snd $1))) (snd $1) } 
   | '++' var                                { LocalAssign $ DefVar (fst $2) (Op (MathOp Plus (Var (fst $2) (snd $2)) (Literal $ EInt 1)) (snd $2)) (snd $2) }
   | '--' var                                { LocalAssign $ DefVar (fst $2) (Op (MathOp Min (Var (fst $2) (snd $2)) (Literal $ EInt 1)) (snd $2)) (snd $2) }
-  | '&'E                                    { AddressExpr $2 $1 }
-  | '*'E %prec POINT                        { PointerExpr $2 } -- !!6 reduce/reduce conflicts due to this!!
+  | '&' E                                   { AddressExpr $2 $1 }
+  | '*' var '=' E %prec POINT               { DefPointerVar (fst $2) $4 }
+  | '*' var %prec POINT                     { PointerExpr (Var (fst $2) (snd $2)) }
+  | '*' '(' E ')' %prec POINT               { PointerExpr $3 } -- !!6 reduce/reduce conflicts due to this!!
   | '!' E                                   { BooleanNotExpr $2 $1 }
   | try '{' E '}' catch '(' P ')' '{' E '}' { TryCatch $3 $7 $10 $5 }
   | V                                       { $1 }
@@ -128,7 +131,6 @@ FTP : TL ',' FTP                            { FuncParam (ExprType $1) $3 }
     | TL                                    { FuncParam (ExprType $1) FuncParamEnd }
 
 TL : FT                                     { $1 }
-   | '('TL')'                               { $2 } -- shift-reduce conflict - stops you from declaring (a) -> b inside function type def
    | '[' ']'                                { TList TEmpty }
    | '[' TL ']'                             { TList $2 }
    | '*'TL                                  { TRef $2 }
@@ -148,7 +150,6 @@ TC : cEq var                                { TypeConstraint CEq (fst $2) }
 
 V : global GV                               { GlobalAssign $2 }
   | GV                                      { LocalAssign $1 }
-  | '*'var '=' E                            { DefPointerVar (fst $2) $4 }
   | global var                              { GlobalVar (fst $2) (snd $2) }
   | var                                     { Var (fst $1) (snd $1) }
 
