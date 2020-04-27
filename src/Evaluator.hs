@@ -739,55 +739,6 @@ evaluateListType store ((VPointerList t ys):xs) t'
 
 evaluateListType _ (_:xs) _ = TConflict
 
--- Comparing value types.
-validType :: Store -> [(String, TypeClass)] -> [Type] -> [ExprValue] -> Bool
-validType store tc [] [] = True
-validType store tc (_:ts) ((VPointer _):es) = validType store tc ts es
-validType store tc (_:ts) ((VVar _):es) = validType store tc ts es
-validType store tc (t:ts) (e:es) = compareTypes tc t (getType store e) && (validType store tc ts es)
-validType _ _ _ _ = False
-
-compareTypes :: [(String, TypeClass)] -> Type -> Type -> Bool
-compareTypes tc (TFunc [] out ftc) (TFunc [] out' ftc') = compareTypes tc out out'
-compareTypes tc (TFunc (p:ps) out ftc) (TFunc (p':ps') out' ftc') = compareTypes tc p p' && compareTypes tc (TFunc ps out ftc) (TFunc ps' out' ftc')
-compareTypes tc TEmpty TEmpty = True
-
-compareTypes tc _ TEmpty = True -- Unsure about this
-compareTypes tc (TList e1) (TList TEmpty) = True
-compareTypes tc (TList e1) (TList e2) = compareTypes tc e1 e2
-compareTypes tc (TList _) (TParamList) = True
-compareTypes tc (TRef e1) (TRef e2) = compareTypes tc e1 e2
-compareTypes tc (TGeneric s) g@(TGeneric s')
-    | s == s' = True
-    | c == Nothing = True
-    | otherwise = isChildOf tc g (s, fromJust c)
-    where
-        c = lookup s tc
-
-compareTypes tc (TGeneric s) TParamList = True
-
-compareTypes tc (TGeneric s) e2
-    | c == Nothing = if isPrimitive e2 then True else False
-    | c == Nothing = False
-    | otherwise = isChildOf tc e2 (s, fromJust c)
-    where 
-        c = lookup s tc
-
-        isPrimitive TInt = True
-        isPrimitive TBool = True
-        isPrimitive TNone = True
-        isPrimitive TException = True
-        isPrimitive (TList t) = isPrimitive t
-        isPrimitive (TRef t) = isPrimitive t
-        isPrimitive TStream = True
-        isPrimitive _ = False
-
-
-compareTypes tc (TIterable g) (TStream) = compareTypes tc g TInt
-compareTypes tc (TIterable g) (TList e2) = compareTypes tc g e2
-compareTypes tc (TIterable g) (TParamList) = True
-compareTypes tc e1 e2 = e1 == e2
-
 -- Check if a type is a child of a type class.
 isChildOf :: [(String, TypeClass)] -> Type -> (String, TypeClass) -> Bool
 

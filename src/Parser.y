@@ -115,25 +115,21 @@ E : E ';' E                                 { Seq $1 $3 }
   | '*'E %prec POINT                        { PointerExpr $2 }
   | '!' E                                   { BooleanNotExpr $2 $1 }
   | try '{' E '}' catch '(' P ')' '{' E '}' { TryCatch $3 $7 $10 $5 }
-  | FT                                      { $1 }
   | V                                       { $1 }
   | B                                       { $1 }
   | O                                       { $1 }
   | C                                       { $1 }
   | L                                       { $1 }
 
-FT : '(' FTP ')' '->' FT                    { FuncType $2 $5 Nothing }
-   | '(' FTP ')' '->' TL                    { FuncType $2 (ExprType $5) Nothing }
-   | '(' FTP ')' '->' FT '~' '(' PC ')'     { FuncType $2 $5 (Just $8) }
-   | '(' FTP ')' '->' TL '~' '(' PC ')'     { FuncType $2 (ExprType $5) (Just $8) }
+FT : '(' FTP ')' '->' TL                    { FuncType $2 $5 Nothing }
+   | '(' FTP ')' '->' TL '~' '(' PC ')'     { FuncType $2 $5 (Just $8) }
 
-FTP : FT ',' FTP                            { FuncParam $1 $3 }
-    | FT                                    { FuncParam $1 FuncParamEnd }
-    | TL ',' FTP                            { FuncParam (ExprType $1) $3 }
-    | TL                                    { FuncParam (ExprType $1) FuncParamEnd }
+FTP : TL ',' FTP                            { FuncParam $1 $3 }
+    | TL                                    { FuncParam $1 FuncParamEnd }
 
-TL : '('TL')'                               { $2 }
-   | '[' ']'                                { TList TEmpty }
+TL : FT                                     { $1 }
+   | '('TL')'                               { $2 } -- shift-reduce conflict - stops you from declaring (a) -> b inside function type def
+   | '[' ']'                                { TList TEmpty } 
    | '[' TL ']'                             { TList $2 }
    | TL'*'                                  { TRef $1 }
    | tInt                                   { TInt }
@@ -142,6 +138,27 @@ TL : '('TL')'                               { $2 }
    | tStream                                { TStream }
    | cItr TL                                { TIterable $2 }
    | var                                    { TGeneric (fst $1) }
+
+-- FT : '(' FTP ')' '->' FT                    { FuncType $2 $5 Nothing }
+--    | '(' FTP ')' '->' TL                    { FuncType $2 (ExprType $5) Nothing }
+--    | '(' FTP ')' '->' FT '~' '(' PC ')'     { FuncType $2 $5 (Just $8) }
+--    | '(' FTP ')' '->' TL '~' '(' PC ')'     { FuncType $2 (ExprType $5) (Just $8) }
+
+-- FTP : FT ',' FTP                            { FuncParam $1 $3 }
+--     | FT                                    { FuncParam $1 FuncParamEnd }
+--     | TL ',' FTP                            { FuncParam (ExprType $1) $3 }
+--     | TL                                    { FuncParam (ExprType $1) FuncParamEnd }
+
+-- TL : '('TL')'                               { $2 } -- shift-reduce conflict - stops you from declaring (a) -> b inside function type def
+--    | '[' ']'                                { TList TEmpty } 
+--    | '[' TL ']'                             { TList $2 }
+--    | TL'*'                                  { TRef $1 }
+--    | tInt                                   { TInt }
+--    | tBool                                  { TBool }
+--    | tNone                                  { TNone }
+--    | tStream                                { TStream }
+--    | cItr TL                                { TIterable $2 }
+--    | var                                    { TGeneric (fst $1) }
 
 PC : TC ',' PC                              { FuncParam $1 $3 }
    | TC                                     { FuncParam $1 FuncParamEnd }

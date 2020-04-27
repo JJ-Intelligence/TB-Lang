@@ -161,7 +161,8 @@ process (LocalAssign (DefVar s (Func ps' e1) l)) (global, local, (ft, tc)) = do
             case (putFuncParamsInStore cs ps ps' (Map.empty) []) of
                 (Left (es, ts)) -> do
                     printStdErr ("Type ERROR: In function definition \'" ++ (show (LocalAssign (DefVar s (Func ps' e1) l))) ++ "\'" ++ (printPos l)
-                        ++ "\nThe function definition's parameters don't match the functions input type:\n"
+                        ++ "\nThe function definition's parameters don't match the functions type:"
+                        ++ "\nThe functions type is: " ++ (show $ TFunc ps out cs) ++ "\n"
                         ++ (foldr (\(t,e) acc -> "Input type \'" ++ (show t) ++ "\' does not match the type of expression \'" ++ (show e) ++ "\'\n"++acc) "" es)
                         ++ "\n" ++ (foldr (\t acc -> "Input type \'" ++ (show t) ++ "\' is not matched in the function definition\n"++acc) "" ts))
                     exitFailure
@@ -281,7 +282,7 @@ process (FuncCall s ps l) (global, local, (ft, cs)) = do
 
             if ms /= Nothing then do
                 printStdErr ("Type ERROR: In function call \'"++(show $ FuncCall s ps l)++"\'" ++ (printPos l)
-                    ++ "\nDeclared input types don't match the types of the function calls parameters:"
+                    ++ "\nDeclared input types don't match the types of the function calls parameters:\n"
                     ++ (foldr (\(t, (e, t')) acc -> "Type \'" ++ (show t) ++ " ~ " ++ (show ts) ++ "\' doesn't match the type of parameter \'"++(show e)++"\' ("++(show t')++")"++acc) "" (fromJust ms)))
                 exitFailure
             else
@@ -354,7 +355,7 @@ process (FuncCall s ps l) (global, local, (ft, cs)) = do
 
             if (compareTypes tc t (head t'))
                 then matchParamsToType tc (global', local', cs) ts e2 es
-                else matchParamsToType tc (global, local, cs) ts e2 ((t, (e1, (head t'))):es)
+                else matchParamsToType tc (global, local, cs) ts e2 ((t, (e1, head t')):es)
 
         containsGeneric :: Type -> Type -- Takes in return type, and returns TConflict if no generics, or TGeneric a if generic
         containsGeneric (TList t) = containsGeneric t
@@ -661,11 +662,12 @@ process (For i c n e l) (global, local, ft) = do
 process e s = return ([TNone], s)
 
 
--- Returns either an error - a list of correct types to their incorrect parameter expressions - or returns an updated TStore
+-- Returns either an error (a list of correct types to their incorrect parameter expressions), or returns an updated TStore
 putFuncParamsInStore :: TypeConstraints -> [Type] -> Parameters -> TStore -> [(Type, Expr)] -> Either ([(Type, Expr)], [Type]) TStore
 putFuncParamsInStore tc ts FuncParamEnd local es
     | ts /= [] || es /= [] = Left (es, ts)
     | otherwise = Right local
+putFuncParamsInStore tc [] _ _ es = Left (es, [])
 putFuncParamsInStore tc (t:ts) (FuncParam e1 e2) local es
     | ms == Nothing = putFuncParamsInStore tc ts e2 local ((t,e1):es)
     | otherwise = putFuncParamsInStore tc ts e2 (foldr (\(s,vt) acc -> Map.insert s [vt] acc) local (fromJust ms)) es
@@ -702,6 +704,7 @@ putFuncParamsInStore tc (t:ts) (FuncParam e1 e2) local es
         getLitType (Literal (EBool _)) = Just TBool
         getLitType (Literal Empty) = Just $ TList TEmpty
         getLitType (Literal ENone) = Just TNone
+        getLitType (FuncType ps out cs) = Just $ evaluateFuncType (FuncType ps out cs)
         getLitType _ = Nothing
 
 
@@ -727,3 +730,39 @@ lookupT name (global, local)
 
 lookupGlobal :: String -> TStore -> Maybe [Type]
 lookupGlobal s global = Map.lookup s global
+
+compareTypes :: [(String, TypeClass)] -> Type -> Type -> Bool
+compareTypes tc (TFunc [] out ftc) (TFunc [] out' ftc') = compareTypes tc out out'
+compareTypes tc (TFunc (p:ps) out ftc) (TFunc (p':ps') out' ftc') = compareTypes tc p p' && compareTypes tc (TFunc ps out ftc) (TFunc ps' out' ftc')
+compareTypes tc TEmpty TEmpty = True
+
+compareTypes tc _ TEmpty = True -- Unsure about this
+compareTypes tc (TList e1) (TList TEmpty) = True
+compareTypes tc (TList e1) (TList e2) = compareTypes tc e1 e2
+compareTypes tc (TList _) (TParamList) = True
+compareTypes tc (TRef e1) (TRef e2) = compareTypes tc e1 e2
+compareTypes tc (TGeneric s) g@(TGeneric s')
+    | s == s' = True
+    | c == Nothing = True
+    | otherwise = isChildOf tc g (s, fromJust c)
+    where
+        c = lookup s tc
+
+compareTypes tc (TGeneric s) TParamList = True
+
+compareTypes tc (TGeneric s) e2
+    | c == Nothing = if notContainsGeneric s e2 then True else False
+    | c == Nothing = False
+    | otherwise = isChildOf tc e2 (s, fromJust c)
+    where 
+        c = lookup s tc
+
+        notContainsGeneric s (TList t) = notContainsGeneric s t
+        notContainsGeneric s (TRef t) = notContainsGeneric s t
+        notContainsGeneric s (TGeneric s') = s /= s'
+        notContainsGeneric _ _ = True
+
+compareTypes tc (TIterable g) (TStream) = compareTypes tc g TInt
+compareTypes tc (TIterable g) (TList e2) = compareTypes tc g e2
+compareTypes tc (TIterable g) (TParamList) = True
+compareTypes tc e1 e2 = e1 == e2
