@@ -228,7 +228,7 @@ data Assignment = DefVar String Expr Pos
 
 data TypeClass = CEq
                | CItr
-               | COrdOrd
+               | COrd
                deriving (Eq, Ord, Show)
 
 data Expr = If Expr Expr (Maybe ExprElif) Pos
@@ -265,7 +265,7 @@ instance Show Expr where
 
   show (ExprType t) = show t
   show (TypeConstraint tc g) = (show tc) ++ " " ++ g
-  show (LocalAssign (DefVar s (ExprType (FuncType ps out cs) _))) = "type " ++ s ++ " (" ++ (show ps) ++ ") -> " ++ (show out) ++ 
+  show (LocalAssign (DefVar s (ExprType (FuncType ps out cs)) _)) = "type " ++ s ++ " (" ++ (show ps) ++ ") -> " ++ (show out) ++ 
       (if cs == Nothing then "" else " ~ (" ++ (show $ fromJust cs) ++ ")")
   show (LocalAssign (DefVar s (Func ps e1) _)) = "func " ++ s ++ " (" ++ (show ps) ++ ") = " ++ (show e1)
   show (FuncCall s ps _)  = s ++ "(" ++ (show ps) ++ ")"

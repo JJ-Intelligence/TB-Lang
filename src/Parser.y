@@ -100,7 +100,7 @@ E : E ';' E                                 { Seq $1 $3 }
   | if '(' E ')' '{' E '}' EElif            { If $3 $6 (Just $8) $1 }
   | if '(' E ')' '{' E '}'                  { If $3 $6 Nothing $1 }
   | for '(' E ';' E ';' E ')' '{' E '}'     { For $3 $5 $7 $10 $1 }
-  | type var FT                             { LocalAssign $ DefVar (fst $2) $3 $1 }
+  | type var FT                             { LocalAssign $ DefVar (fst $2) (ExprType $3) $1 }
   | func var '(' P ')' '=' E                { LocalAssign $ DefVar (fst $2) (Func $4 $7) $1 }
   | func var '(' ')' '=' E                  { LocalAssign $ DefVar (fst $2) (Func FuncParamEnd $6) $1 }
   | return '(' E ')'                        { Return $3 $1 }
@@ -112,7 +112,7 @@ E : E ';' E                                 { Seq $1 $3 }
   | '++' var                                { LocalAssign $ DefVar (fst $2) (Op (MathOp Plus (Var (fst $2) (snd $2)) (Literal $ EInt 1)) (snd $2)) (snd $2) }
   | '--' var                                { LocalAssign $ DefVar (fst $2) (Op (MathOp Min (Var (fst $2) (snd $2)) (Literal $ EInt 1)) (snd $2)) (snd $2) }
   | '&'E                                    { AddressExpr $2 $1 }
-  | '*'E %prec POINT                        { PointerExpr $2 }
+  | '*'E %prec POINT                        { PointerExpr $2 } -- !!6 reduce/reduce conflicts due to this!!
   | '!' E                                   { BooleanNotExpr $2 $1 }
   | try '{' E '}' catch '(' P ')' '{' E '}' { TryCatch $3 $7 $10 $5 }
   | V                                       { $1 }
@@ -121,44 +121,23 @@ E : E ';' E                                 { Seq $1 $3 }
   | C                                       { $1 }
   | L                                       { $1 }
 
-FT : '(' FTP ')' '->' TL                    { FuncType $2 $5 Nothing }
-   | '(' FTP ')' '->' TL '~' '(' PC ')'     { FuncType $2 $5 (Just $8) }
+FT : '(' FTP ')' '->' TL                    { FuncType $2 (ExprType $5) Nothing }
+   | '(' FTP ')' '->' TL '~' '(' PC ')'     { FuncType $2 (ExprType $5) (Just $8) }
 
-FTP : TL ',' FTP                            { FuncParam $1 $3 }
-    | TL                                    { FuncParam $1 FuncParamEnd }
+FTP : TL ',' FTP                            { FuncParam (ExprType $1) $3 }
+    | TL                                    { FuncParam (ExprType $1) FuncParamEnd }
 
 TL : FT                                     { $1 }
    | '('TL')'                               { $2 } -- shift-reduce conflict - stops you from declaring (a) -> b inside function type def
-   | '[' ']'                                { TList TEmpty } 
+   | '[' ']'                                { TList TEmpty }
    | '[' TL ']'                             { TList $2 }
-   | TL'*'                                  { TRef $1 }
+   | '*'TL                                  { TRef $2 }
    | tInt                                   { TInt }
    | tBool                                  { TBool }
    | tNone                                  { TNone }
    | tStream                                { TStream }
    | cItr TL                                { TIterable $2 }
    | var                                    { TGeneric (fst $1) }
-
--- FT : '(' FTP ')' '->' FT                    { FuncType $2 $5 Nothing }
---    | '(' FTP ')' '->' TL                    { FuncType $2 (ExprType $5) Nothing }
---    | '(' FTP ')' '->' FT '~' '(' PC ')'     { FuncType $2 $5 (Just $8) }
---    | '(' FTP ')' '->' TL '~' '(' PC ')'     { FuncType $2 (ExprType $5) (Just $8) }
-
--- FTP : FT ',' FTP                            { FuncParam $1 $3 }
---     | FT                                    { FuncParam $1 FuncParamEnd }
---     | TL ',' FTP                            { FuncParam (ExprType $1) $3 }
---     | TL                                    { FuncParam (ExprType $1) FuncParamEnd }
-
--- TL : '('TL')'                               { $2 } -- shift-reduce conflict - stops you from declaring (a) -> b inside function type def
---    | '[' ']'                                { TList TEmpty } 
---    | '[' TL ']'                             { TList $2 }
---    | TL'*'                                  { TRef $1 }
---    | tInt                                   { TInt }
---    | tBool                                  { TBool }
---    | tNone                                  { TNone }
---    | tStream                                { TStream }
---    | cItr TL                                { TIterable $2 }
---    | var                                    { TGeneric (fst $1) }
 
 PC : TC ',' PC                              { FuncParam $1 $3 }
    | TC                                     { FuncParam $1 FuncParamEnd }
