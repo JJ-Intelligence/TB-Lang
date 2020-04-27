@@ -50,7 +50,7 @@
 		"keywords": {
 			"patterns": [{
 				"name": "keyword.control.tb",
-				"match": "\\b(if|while|for|return|func|elif|else|type)\\b"
+				"match": "\\b(if|while|for|return|func|elif|else|type|try|catch|global)\\b"
 			}]
 		},
 		"constants": {
