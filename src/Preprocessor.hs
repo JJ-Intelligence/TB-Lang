@@ -359,7 +359,7 @@ process (FuncCall s ps l) (global, local, (ft, cs)) = do
                                             acc' <- acc
                                             return (head t':acc')) (return []) (foldOverParams (map snd xs) 0 ps) -- ys = IO [(Type, Int)] (function argument types)
 
-                            zs <- getGenericTypes (map fst xs) ys
+                            zs <- getGenericTypes g' (map fst xs) ys
                             
                             case (length (Set.fromList zs)) == 1 of
                                 False -> do
@@ -409,18 +409,26 @@ process (FuncCall s ps l) (global, local, (ft, cs)) = do
                 then matchParamsToType tc (global', local', cs) ts e2 es
                 else matchParamsToType tc (global, local, cs) ts e2 ((t, (e1, head t')):es)
 
-        containsGeneric :: Type -> Type -- Takes in return type, and returns TConflict if no generics, or TGeneric a if generic
+        -- Takes in a Type.
+        -- Returns TConflict if the type contains no generics, else returns the generic.
+        containsGeneric :: Type -> Type
         containsGeneric (TList t) = containsGeneric t
         containsGeneric (TRef t) = containsGeneric t
         containsGeneric (TIterable t) = containsGeneric t
         containsGeneric g@(TGeneric s) = g
         containsGeneric _ = TConflict
 
-        isGenericInFuncParam :: String -> Type -> Bool -- Takes in generic and a parameter type, returns TConflict if generic doesn't match, else returns the param type.
+        -- Takes in the name of a generic, and a parameter type.
+        -- Returns a False if the generic is not found in the type, else returns True.
+        isGenericInFuncParam :: String -> Type -> Bool
         isGenericInFuncParam s (TList t) = isGenericInFuncParam s t
         isGenericInFuncParam s (TRef t) = isGenericInFuncParam s t
         isGenericInFuncParam s (TIterable t) = isGenericInFuncParam s t
         isGenericInFuncParam s (TGeneric s') = s == s'
+        isGenericInFuncParam s (TFunc ps out ts) = isInFuncPs s ps || isGenericInFuncParam s out
+            where
+                isInFuncPs s [] = False
+                isInFuncPs s (p:ps) = isGenericInFuncParam s p || isInFuncPs s ps
         isGenericInFuncParam _ _ = False
 
         foldOverParams :: [Int] -> Int -> Parameters -> [Expr]
@@ -429,27 +437,43 @@ process (FuncCall s ps l) (global, local, (ft, cs)) = do
             | i == n = e1 : foldOverParams ns (i+1) e2
             | otherwise = foldOverParams (n:ns) (i+1) e2
 
-        getGenericTypes :: [Type] -> [Type] -> IO [Type]
-        getGenericTypes [] _ = return []
-        getGenericTypes (t:tp) (t':ta) = do
-            case getGenType t t' of
-                TConflict -> do
+        -- Takes in the unkown generic name, a list of parameter Types (all of which contain generics), and a list of their corresponding 
+        -- arguments in the function call.
+        -- Returns a list of the generics actual types, inferred from the function call arguments.
+        getGenericTypes :: String -> [Type] -> [Type] -> IO [Type]
+        getGenericTypes g [] _ = return []
+        getGenericTypes g (t:tp) (t':ta) = do
+            case getGenType g t t' of
+                [TConflict] -> do
                     printStdErr ("Type ERROR: In function call \'" ++ (show (FuncCall s ps l)) ++ "\'" ++ (printPos l)
                         ++ "\nA parameter has type: " ++ (show t')
                         ++ "\nBut its type should be: " ++ (show t))
                     exitFailure
                 t -> do
-                    ts <- getGenericTypes tp ta
-                    return (t:ts)
+                    ts <- getGenericTypes g tp ta
+                    return (t++ts)
             where
-                getGenType :: Type -> Type -> Type
-                getGenType (TList t) (TList t') = getGenType t t'
-                getGenType (TRef t) (TRef t') = getGenType t t'
-                getGenType (TIterable t) (TList t') = getGenType t t'
-                getGenType (TIterable (TGeneric a)) (TStream) = TInt
-                getGenType (TGeneric a) t = t
-                getGenType _ _ = TConflict
+                -- Takes in the unknown generic name, a parameter Type containing a generic, and its corresponding argument Type 
+                -- from the function call.
+                -- Returns a list of Types which the generic' in the parameter type will map to.
+                getGenType :: String -> Type -> Type -> [Type]
+                getGenType g (TList t) (TList t') = getGenType g t t'
+                getGenType g (TRef t) (TRef t') = getGenType g t t'
+                getGenType g (TIterable t) (TList t') = getGenType g t t'
+                getGenType g (TIterable (TGeneric a)) (TStream) = [TInt]
+                getGenType g (TGeneric a) t
+                    | a == g = [t]
+                    | otherwise = [TConflict]
+                getGenType g (TFunc ps out ts) (TFunc ps' out' ts')
+                    | tout == [TConflict] && tps == [] = [TConflict]
+                    | tout == [TConflict] = tps
+                    | otherwise = tps ++ tout
+                    where
+                        tout = getGenType g out out'
+                        tps = foldr (\(p,p') acc -> let t = (getGenType g p p') in 
+                                     if t == [TConflict] then acc else t ++ acc) [] (zip ps ps')
 
+                getGenType _ _ _ = [TConflict]
         subTypeIntoGeneric :: String -> Type -> Type -> Type
         subTypeIntoGeneric g t (TList t')
             | rt == TConflict = TConflict
@@ -862,3 +886,9 @@ isChildOf tc (TGeneric a) (s, COrd)
     | otherwise = False
     where t = lookup a tc
 isChildOf tc _ (s, COrd) = False
+
+-- Print class.
+isChildOf tc TInt (s, CPrintable) = True
+isChildOf tc (TList TInt) (s, CPrintable) = True
+isChildOf tc (TList TEmpty) (s, CPrintable) = True
+isChildOf tc _ (s, CPrintable) = False

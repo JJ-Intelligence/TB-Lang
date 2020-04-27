@@ -230,7 +230,13 @@ data TypeClass = CEq
                | CItr
                | COrd
                | CPrintable
-               deriving (Eq, Ord, Show)
+               deriving (Eq, Ord)
+
+instance Show TypeClass where
+    show CEq = "Eq"
+    show CItr = "Itr"
+    show COrd = "Ord"
+    show CPrintable = "Printable"
 
 data Expr = If Expr Expr (Maybe ExprElif) Pos
           | While Expr Expr Pos
