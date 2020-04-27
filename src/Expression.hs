@@ -69,6 +69,7 @@ data Type = TFunc [Type] Type [(String, TypeClass)]
           | TConflict
           | TParamList
           | TException
+          | FuncType Parameters Expr (Maybe Parameters)
           deriving (Eq, Ord)
 
 instance Show Type where 
@@ -90,11 +91,13 @@ instance Show Type where
     show TConflict = "Type Conflict"
     show TParamList = "TParamList"
     show TException = "Exception"
+    show (FuncType ps out cs) = "(" ++ (show ps) ++ ") -> " ++ (show out) ++ 
+      (if cs == Nothing then "" else " ~ (" ++ (show $ fromJust cs) ++ ")")
 
 -- Elif part of an If statement.
 data ExprElif = Elif Expr Expr (Maybe ExprElif) Pos
               | Else Expr
-              deriving (Eq)
+              deriving (Eq, Ord)
 
 instance Show ExprElif where
   show (Elif c e1 Nothing _) = " elif (" ++ (show c) ++ ") {\n" ++ (tabString $ show e1) ++ "\n}" 
@@ -106,7 +109,7 @@ data ExprLiteral = EInt Int
                  | EBool Bool
                  | Empty
                  | ENone
-                 deriving (Eq)
+                 deriving (Eq, Ord)
 
 instance Show ExprLiteral where
   show (EInt n) = show n
@@ -170,7 +173,7 @@ instance Ord ExprValue where
 data BinOp = CompOp ExprComp Expr Expr
            | MathOp ExprMath Expr Expr
            | Cons Expr Expr
-           deriving (Eq)
+           deriving (Eq, Ord)
 
 instance Show BinOp where
   show (CompOp op e1 e2) = (show e1) ++ " " ++ (show op) ++ " " ++ (show e2)
@@ -184,7 +187,7 @@ data ExprComp = Equality
               | Or
               | LessThan
               | GreaterThan
-              deriving (Eq)
+              deriving (Eq, Ord)
 
 instance Show ExprComp where
   show Equality = "=="
@@ -201,7 +204,7 @@ data ExprMath = Plus
               | Div
               | Exp
               | Mod
-              deriving (Eq)
+              deriving (Eq, Ord)
 
 instance Show ExprMath where
   show Plus = "+"
@@ -213,7 +216,7 @@ instance Show ExprMath where
 
 data Parameters = FuncParam Expr Parameters
                 | FuncParamEnd
-                deriving (Eq)
+                deriving (Eq, Ord)
 
 instance Show Parameters where
   show (FuncParam e1 FuncParamEnd) = show e1
@@ -221,7 +224,7 @@ instance Show Parameters where
   show (FuncParamEnd) = ""
 
 data Assignment = DefVar String Expr Pos
-                deriving (Eq, Show)
+                deriving (Eq, Show, Ord)
 
 data TypeClass = CEq
                | CItr
@@ -232,7 +235,6 @@ data Expr = If Expr Expr (Maybe ExprElif) Pos
           | While Expr Expr Pos
           | For Expr Expr Expr Expr Pos
           | Func Parameters Expr
-          | FuncType Parameters Expr (Maybe Parameters)
           | ExprType Type
           | TypeConstraint TypeClass String
           | Return Expr Pos
@@ -252,7 +254,7 @@ data Expr = If Expr Expr (Maybe ExprElif) Pos
           | FuncBlock Expr Pos
           | BuiltInFunc String [Expr]
           | TryCatch Expr Parameters Expr Pos
-          deriving (Eq)
+          deriving (Eq, Ord)
 
 instance Show Expr where
   show (If c e1 Nothing _) = "if (" ++ (show c) ++ ") {\n" ++ (tabString $ show e1) ++ "\n}"
@@ -263,7 +265,7 @@ instance Show Expr where
 
   show (ExprType t) = show t
   show (TypeConstraint tc g) = (show tc) ++ " " ++ g
-  show (LocalAssign (DefVar s (FuncType ps out cs) _)) = "type " ++ s ++ " (" ++ (show ps) ++ ") -> " ++ (show out) ++ 
+  show (LocalAssign (DefVar s (ExprType (FuncType ps out cs)) _)) = "type " ++ s ++ " (" ++ (show ps) ++ ") -> " ++ (show out) ++ 
       (if cs == Nothing then "" else " ~ (" ++ (show $ fromJust cs) ++ ")")
   show (LocalAssign (DefVar s (Func ps e1) _)) = "func " ++ s ++ " (" ++ (show ps) ++ ") = " ++ (show e1)
   show (FuncCall s ps _)  = s ++ "(" ++ (show ps) ++ ")"

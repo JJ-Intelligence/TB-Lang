@@ -131,10 +131,10 @@ process (FuncBlock e1 l) (global, local, (ft, tc)) = do
 
 
 -- Declaring a function type.
-process (LocalAssign (DefVar s (FuncType ps out cs) l)) (global, local, ft) = do
+process (LocalAssign (DefVar s (ExprType (FuncType ps out cs)) l)) (global, local, ft) = do
     case (Map.lookup s local) of
         Just ([TFunc ps' out' cs'])  -> do
-            printStdErr ("Type ERROR: In function type definition \'" ++ (show $ LocalAssign (DefVar s (FuncType ps out cs) l)) ++ "\'"  ++ (printPos l)
+            printStdErr ("Type ERROR: In function type definition \'" ++ (show $ LocalAssign (DefVar s (ExprType (FuncType ps out cs)) l)) ++ "\'"  ++ (printPos l)
                 ++"\nThe functions type has already been declared as: " ++ (show (TFunc ps' out' cs')))
             exitFailure
         _ -> do
@@ -161,7 +161,8 @@ process (LocalAssign (DefVar s (Func ps' e1) l)) (global, local, (ft, tc)) = do
             case (putFuncParamsInStore cs ps ps' (Map.empty) []) of
                 (Left (es, ts)) -> do
                     printStdErr ("Type ERROR: In function definition \'" ++ (show (LocalAssign (DefVar s (Func ps' e1) l))) ++ "\'" ++ (printPos l)
-                        ++ "\nThe function definition's parameters don't match the functions input type:\n"
+                        ++ "\nThe function definition's parameters don't match the functions type:"
+                        ++ "\nThe functions type is: " ++ (show $ TFunc ps out cs) ++ "\n"
                         ++ (foldr (\(t,e) acc -> "Input type \'" ++ (show t) ++ "\' does not match the type of expression \'" ++ (show e) ++ "\'\n"++acc) "" es)
                         ++ "\n" ++ (foldr (\t acc -> "Input type \'" ++ (show t) ++ "\' is not matched in the function definition\n"++acc) "" ts))
                     exitFailure
@@ -220,6 +221,59 @@ process (GlobalAssign (DefVar s e1 _)) state@(global, local, (ft, _)) = do
         True -> return (t', (global', Map.insert s t' local', ft'))
         False -> return (t', (Map.insert s t' global', local', ft'))
 
+process (DefPointerVar s e1) (global, local, ft) = do
+    let t = lookupT s (global, local)
+    if t == Nothing then do
+        printStdErr ("Access ERROR: In variable access for \'" ++ (show (DefPointerVar s e1)) ++ "\'"
+            ++ "\nPointer variable " ++ s ++ " has not been declared yet")
+        exitFailure
+    else 
+        return ()
+
+    if length (fromJust t) /= 1 then do
+        printStdErr ("Access ERROR: In variable access for \'" ++ (show (DefPointerVar s e1)) ++ "\'"
+            ++ "\nPointer variable has ambiguous types: " ++ (show $ head $ fromJust t) ++ (foldr (\t' acc -> ", " ++ (show t') ++ acc) "" (tail $ fromJust t)))
+        exitFailure
+    else
+        return ()
+
+    if (isNotRef $ head $ fromJust t) then do
+        printStdErr ("Access ERROR: In pointer variable access \'" ++ (show (DefPointerVar s e1)) ++ "\'"
+            ++ "\nVariable " ++ s ++ " has type "++(show $ head $ fromJust t)++", but it should be a reference")
+        exitFailure
+    else
+        return ()
+
+    (t', (global', local', ft')) <- process e1 (global, local, ft)
+
+    if length (fromJust t) /= 1 then do
+        printStdErr ("Access ERROR: In variable assignment for \'" ++ (show (DefPointerVar s e1)) ++ "\'"
+            ++ "\nExpression e1 has ambiguous types: " ++ (show $ head t') ++ (foldr (\t' acc -> ", " ++ (show t') ++ acc) "" (tail t')))
+        exitFailure
+    else
+        return ()
+
+    return (t', (global', Map.insert s ([TRef $ head $ t']) local', ft'))
+
+    where
+        isNotRef (TRef _) = False
+        isNotRef _ = True
+
+process (PointerExpr e1) (global, local, ft) = do
+    (t, (global', local', ft')) <- process e1 (global, local, ft)
+    if length t /= 1 then do
+        printStdErr ("Type ERROR: In pointer expression \'" ++ (show (PointerExpr e1)) ++ "\'"
+            ++ "\nPointed expression has ambiguous types: " ++ (show $ head t) ++ (foldr (\t' acc -> ", " ++ (show t') ++ acc) "" (tail t)))
+        exitFailure
+    else
+        return ()
+
+    case head t of
+        (TRef t') -> return ([t'], (global', local', ft'))
+        t' -> do
+            printStdErr ("Type ERROR: In pointer expression \'" ++ (show (PointerExpr e1)) ++ "\'"
+                ++ "\nPointed expression \'"++(show e1)++"\' has type " ++ (show t') ++ ", but it should be a reference")
+            exitFailure
 
 process (Var s l) state@(global, local, ft) = do
     let t = (lookupT s (global, local))
@@ -262,7 +316,6 @@ process (TryCatch e1 ps e2 l) (global, local, ft) = do
     (t', (global', local', ft')) <- process e2 (global, local, ft)
     return ([TNone], (global', local', ft'))
 
-
     where
         paramsToList :: Parameters -> [Expr]
         paramsToList FuncParamEnd = []
@@ -281,8 +334,8 @@ process (FuncCall s ps l) (global, local, (ft, cs)) = do
 
             if ms /= Nothing then do
                 printStdErr ("Type ERROR: In function call \'"++(show $ FuncCall s ps l)++"\'" ++ (printPos l)
-                    ++ "\nDeclared input types don't match the types of the function calls parameters:"
-                    ++ (foldr (\(t, (e, t')) acc -> "Type \'" ++ (show t) ++ " ~ " ++ (show ts) ++ "\' doesn't match the type of parameter \'"++(show e)++"\' ("++(show t')++")"++acc) "" (fromJust ms)))
+                    ++ "\nDeclared input types don't match the types of the function calls parameters:\n"
+                    ++ (foldr (\(t, (e, t')) acc -> "Type \'" ++ (show t) ++ (if ts == [] then "" else " ~ ("++(showTypeConstraints ts)++")") ++ "\' doesn't match the type of parameter \'"++(show e)++"\' ("++(show t')++")"++acc) "" (fromJust ms)))
                 exitFailure
             else
                 return ()
@@ -354,7 +407,7 @@ process (FuncCall s ps l) (global, local, (ft, cs)) = do
 
             if (compareTypes tc t (head t'))
                 then matchParamsToType tc (global', local', cs) ts e2 es
-                else matchParamsToType tc (global, local, cs) ts e2 ((t, (e1, (head t'))):es)
+                else matchParamsToType tc (global, local, cs) ts e2 ((t, (e1, head t')):es)
 
         containsGeneric :: Type -> Type -- Takes in return type, and returns TConflict if no generics, or TGeneric a if generic
         containsGeneric (TList t) = containsGeneric t
@@ -412,6 +465,11 @@ process (FuncCall s ps l) (global, local, (ft, cs)) = do
             where rt = subTypeIntoGeneric g t t'
         subTypeIntoGeneric g t (TGeneric a) = t
         subTypeIntoGeneric _ _ _ = TConflict
+
+        showTypeConstraints :: [(String, TypeClass)] -> String
+        showTypeConstraints [] = ""
+        showTypeConstraints [(s,c)] = (show c)++" "++s
+        showTypeConstraints ((s,c):tc) = (show c)++" "++s++", "++(showTypeConstraints tc)
 
 
 process (Op (Cons e1 e2) l) (global, local, ft) = do
@@ -661,11 +719,12 @@ process (For i c n e l) (global, local, ft) = do
 process e s = return ([TNone], s)
 
 
--- Returns either an error - a list of correct types to their incorrect parameter expressions - or returns an updated TStore
+-- Returns either an error (a list of correct types to their incorrect parameter expressions), or returns an updated TStore
 putFuncParamsInStore :: TypeConstraints -> [Type] -> Parameters -> TStore -> [(Type, Expr)] -> Either ([(Type, Expr)], [Type]) TStore
 putFuncParamsInStore tc ts FuncParamEnd local es
     | ts /= [] || es /= [] = Left (es, ts)
     | otherwise = Right local
+putFuncParamsInStore tc [] _ _ es = Left (es, [])
 putFuncParamsInStore tc (t:ts) (FuncParam e1 e2) local es
     | ms == Nothing = putFuncParamsInStore tc ts e2 local ((t,e1):es)
     | otherwise = putFuncParamsInStore tc ts e2 (foldr (\(s,vt) acc -> Map.insert s [vt] acc) local (fromJust ms)) es
@@ -702,6 +761,7 @@ putFuncParamsInStore tc (t:ts) (FuncParam e1 e2) local es
         getLitType (Literal (EBool _)) = Just TBool
         getLitType (Literal Empty) = Just $ TList TEmpty
         getLitType (Literal ENone) = Just TNone
+        getLitType (ExprType (FuncType ps out cs)) = Just $ evaluateFuncType (FuncType ps out cs)
         getLitType _ = Nothing
 
 
@@ -727,3 +787,78 @@ lookupT name (global, local)
 
 lookupGlobal :: String -> TStore -> Maybe [Type]
 lookupGlobal s global = Map.lookup s global
+
+compareTypes :: [(String, TypeClass)] -> Type -> Type -> Bool
+compareTypes tc (TFunc [] out ftc) (TFunc [] out' ftc') = compareTypes tc out out'
+compareTypes tc (TFunc (p:ps) out ftc) (TFunc (p':ps') out' ftc') = compareTypes tc p p' && compareTypes tc (TFunc ps out ftc) (TFunc ps' out' ftc')
+compareTypes tc TEmpty TEmpty = True
+
+compareTypes tc _ TEmpty = True -- Unsure about this
+compareTypes tc (TList e1) (TList TEmpty) = True
+compareTypes tc (TList e1) (TList e2) = compareTypes tc e1 e2
+compareTypes tc (TList _) (TParamList) = True
+compareTypes tc (TRef e1) (TRef e2) = compareTypes tc e1 e2
+compareTypes tc (TGeneric s) g@(TGeneric s')
+    | s == s' = True
+    | c == Nothing = True
+    | otherwise = isChildOf tc g (s, fromJust c)
+    where
+        c = lookup s tc
+
+compareTypes tc (TGeneric s) TParamList = True
+
+compareTypes tc (TGeneric s) e2
+    | c == Nothing = if notContainsGeneric s e2 then True else False
+    | c == Nothing = False
+    | otherwise = isChildOf tc e2 (s, fromJust c)
+    where 
+        c = lookup s tc
+
+        notContainsGeneric s (TList t) = notContainsGeneric s t
+        notContainsGeneric s (TRef t) = notContainsGeneric s t
+        notContainsGeneric s (TGeneric s') = s /= s'
+        notContainsGeneric _ _ = True
+
+compareTypes tc (TIterable g) (TStream) = compareTypes tc g TInt
+compareTypes tc (TIterable g) (TList e2) = compareTypes tc g e2
+compareTypes tc (TIterable g) (TParamList) = True
+compareTypes tc e1 e2 = e1 == e2
+
+-- Check if a type is a child of a type class.
+isChildOf :: [(String, TypeClass)] -> Type -> (String, TypeClass) -> Bool
+
+-- Eq class.
+isChildOf tc TInt (s, CEq) = True
+isChildOf tc TBool (s, CEq) = True
+isChildOf tc TEmpty (s, CEq) = True
+isChildOf tc TNone (s, CEq) = True
+isChildOf tc TException (s, CEq) = True
+isChildOf tc (TList e1) (s, CEq) = isChildOf tc e1 (s, CEq)
+isChildOf tc (TGeneric a) (s, CEq)
+    | a == s = False -- a == s, so a can't be a child of s
+    | t == Nothing = False
+    | fromJust t == CEq = True
+    | otherwise = False
+    where t = lookup a tc
+isChildOf _ _ (_, CEq) = False
+
+-- Itr class.
+isChildOf tc (TList _) (s, CItr) = True
+isChildOf tc TStream (s, CItr) = True
+isChildOf tc (TGeneric a) (s, CItr)
+    | a == s = False
+    | t == Nothing = False
+    | fromJust t == CItr = True
+    | otherwise = False
+    where t = lookup a tc
+isChildOf _ _ (s, CItr) = False
+
+-- Ord class.
+isChildOf tc TInt (s, COrd) = True
+isChildOf tc (TGeneric a) (s, COrd)
+    | a == s = False
+    | t == Nothing = False
+    | fromJust t == COrd = True
+    | otherwise = False
+    where t = lookup a tc
+isChildOf tc _ (s, COrd) = False

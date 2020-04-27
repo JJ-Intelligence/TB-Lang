@@ -102,7 +102,7 @@ step (Seq e1 e2, env, store, nextAddr, callS, kon) = step (e1, env, store, nextA
 step (Value e1, env, store, nextAddr, callS, (HBinOp (BinSeqOp e2)):kon) = step (e2, env, store, nextAddr, callS, kon)
 
 -- Defining the type of a new function.
-step (LocalAssign (DefVar s (FuncType ps out cs) _), env, store, nextAddr, callS, kon) = step (Value VNone, env', store', nextAddr', callS, kon)
+step (LocalAssign (DefVar s (ExprType (FuncType ps out cs)) _), env, store, nextAddr, callS, kon) = step (Value VNone, env', store', nextAddr', callS, kon)
     where
         (env', store', nextAddr') = updateEnvStore env store nextAddr s (VFunc ft [])
         ft = evaluateFuncType (FuncType ps out cs)
@@ -166,7 +166,7 @@ step (GlobalVar s _, env, store, nextAddr, callS, kon) = step (Value $ lookupVar
     where (GlobalEnv globalEnv) = fromJust $ MapL.lookup storedGlobalEnv store
 
 -- Accessing a variable pointer.
-step (PointerExpr (Var s _), env, store, nextAddr, callS, kon) = step (Value $ lookupPointerVar s env store, env, store, nextAddr, callS, kon)
+step (PointerExpr (Var s _), env, store, nextAddr, callS, kon) = step (Value $ fromJust $ lookupPointerVar s env store, env, store, nextAddr, callS, kon)
 step (PointerExpr e1, env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, kon)
 
 -- Getting the address for an addressed variable.
@@ -739,106 +739,18 @@ evaluateListType store ((VPointerList t ys):xs) t'
 
 evaluateListType _ (_:xs) _ = TConflict
 
--- Comparing value types.
-validType :: Store -> [(String, TypeClass)] -> [Type] -> [ExprValue] -> Bool
-validType store tc [] [] = True
-validType store tc (_:ts) ((VPointer _):es) = validType store tc ts es
-validType store tc (_:ts) ((VVar _):es) = validType store tc ts es
-validType store tc (t:ts) (e:es) = compareTypes tc t (getType store e) && (validType store tc ts es)
-validType _ _ _ _ = False
-
-compareTypes :: [(String, TypeClass)] -> Type -> Type -> Bool
-compareTypes tc (TFunc [] out ftc) (TFunc [] out' ftc') = compareTypes tc out out'
-compareTypes tc (TFunc (p:ps) out ftc) (TFunc (p':ps') out' ftc') = compareTypes tc p p' && compareTypes tc (TFunc ps out ftc) (TFunc ps' out' ftc')
-compareTypes tc TEmpty TEmpty = True
-
-compareTypes tc _ TEmpty = True -- Unsure about this
-compareTypes tc (TList e1) (TList TEmpty) = True
-compareTypes tc (TList e1) (TList e2) = compareTypes tc e1 e2
-compareTypes tc (TList _) (TParamList) = True
-compareTypes tc (TRef e1) (TRef e2) = compareTypes tc e1 e2
-compareTypes tc (TGeneric s) g@(TGeneric s')
-    | s == s' = True
-    | c == Nothing = True
-    | otherwise = isChildOf tc g (s, fromJust c)
-    where
-        c = lookup s tc
-
-compareTypes tc (TGeneric s) TParamList = True
-
-compareTypes tc (TGeneric s) e2
-    | c == Nothing = if isPrimitive e2 then True else False
-    | c == Nothing = False
-    | otherwise = isChildOf tc e2 (s, fromJust c)
-    where 
-        c = lookup s tc
-
-        isPrimitive TInt = True
-        isPrimitive TBool = True
-        isPrimitive TNone = True
-        isPrimitive TException = True
-        isPrimitive (TList t) = isPrimitive t
-        isPrimitive (TRef t) = isPrimitive t
-        isPrimitive TStream = True
-        isPrimitive _ = False
-
-
-compareTypes tc (TIterable g) (TStream) = compareTypes tc g TInt
-compareTypes tc (TIterable g) (TList e2) = compareTypes tc g e2
-compareTypes tc (TIterable g) (TParamList) = True
-compareTypes tc e1 e2 = e1 == e2
-
--- Check if a type is a child of a type class.
-isChildOf :: [(String, TypeClass)] -> Type -> (String, TypeClass) -> Bool
-
--- Eq class.
-isChildOf tc TInt (s, CEq) = True
-isChildOf tc TBool (s, CEq) = True
-isChildOf tc TEmpty (s, CEq) = True
-isChildOf tc TNone (s, CEq) = True
-isChildOf tc TException (s, CEq) = True
-isChildOf tc (TList e1) (s, CEq) = isChildOf tc e1 (s, CEq)
-isChildOf tc (TGeneric a) (s, CEq)
-    | a == s = False -- a == s, so a can't be a child of s
-    | t == Nothing = False
-    | fromJust t == CEq = True
-    | otherwise = False
-    where t = lookup a tc
-isChildOf _ _ (_, CEq) = False
-
--- Itr class.
-isChildOf tc (TList _) (s, CItr) = True
-isChildOf tc TStream (s, CItr) = True
-isChildOf tc (TGeneric a) (s, CItr)
-    | a == s = False
-    | t == Nothing = False
-    | fromJust t == CItr = True
-    | otherwise = False
-    where t = lookup a tc
-isChildOf _ _ (s, CItr) = False
-
--- Ord class.
-isChildOf tc TInt (s, COrd) = True
-isChildOf tc (TGeneric a) (s, COrd)
-    | a == s = False
-    | t == Nothing = False
-    | fromJust t == COrd = True
-    | otherwise = False
-    where t = lookup a tc
-isChildOf tc _ (s, COrd) = False
-
 -- Build a function type.
-evaluateFuncType :: Expr -> Type 
+evaluateFuncType :: Type -> Type 
 evaluateFuncType (FuncType ps out cs) = buildTFunc ps out cs
     where
         buildTFunc ps out cs = TFunc (evaluateParams ps) (evaluateOut out) (if cs == Nothing then [] else evaluateConstraints $ fromJust cs)
 
         evaluateParams FuncParamEnd = []
-        evaluateParams (FuncParam (FuncType ps' out' cs') e3) = buildTFunc ps' out' cs' : evaluateParams e3
+        evaluateParams (FuncParam (ExprType (FuncType ps' out' cs')) e3) = buildTFunc ps' out' cs' : evaluateParams e3
         evaluateParams (FuncParam (ExprType t) e3) = t : evaluateParams e3
 
+        evaluateOut (ExprType (FuncType ps' out' cs')) = buildTFunc ps' out' cs'
         evaluateOut (ExprType t) = t
-        evaluateOut (FuncType ps' out' cs') = buildTFunc ps' out' cs'
 
         evaluateConstraints FuncParamEnd = []
         evaluateConstraints (FuncParam (TypeConstraint cl g) e3) = (g, cl) : evaluateConstraints e3
@@ -859,10 +771,10 @@ lookupVar s env store
           globalAddr = Map.lookup s globalEnv
           (GlobalEnv globalEnv) = fromJust $ MapL.lookup storedGlobalEnv store
 
-lookupPointerVar :: String -> Environment -> Store -> ExprValue
+lookupPointerVar :: String -> Environment -> Store -> Maybe ExprValue
 lookupPointerVar s env store
-    | (isTRef $ getType store val) = fromJust $ MapL.lookup r store
-    | otherwise = error "Error, variable is not a pointer!"
+    | (isTRef $ getType store val) = MapL.lookup r store
+    | otherwise = Nothing
     where val = lookupVar s env store
           (VRef r) = val
 
