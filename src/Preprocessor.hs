@@ -335,7 +335,7 @@ process (FuncCall s ps l) (global, local, (ft, cs)) = do
             if ms /= Nothing then do
                 printStdErr ("Type ERROR: In function call \'"++(show $ FuncCall s ps l)++"\'" ++ (printPos l)
                     ++ "\nDeclared input types don't match the types of the function calls parameters:\n"
-                    ++ (foldr (\(t, (e, t')) acc -> "Type \'" ++ (show t) ++ " ~ " ++ (show ts) ++ "\' doesn't match the type of parameter \'"++(show e)++"\' ("++(show t')++")"++acc) "" (fromJust ms)))
+                    ++ (foldr (\(t, (e, t')) acc -> "Type \'" ++ (show t) ++ (if ts == [] then "" else " ~ ("++(showTypeConstraints ts)++")") ++ "\' doesn't match the type of parameter \'"++(show e)++"\' ("++(show t')++")"++acc) "" (fromJust ms)))
                 exitFailure
             else
                 return ()
@@ -465,6 +465,11 @@ process (FuncCall s ps l) (global, local, (ft, cs)) = do
             where rt = subTypeIntoGeneric g t t'
         subTypeIntoGeneric g t (TGeneric a) = t
         subTypeIntoGeneric _ _ _ = TConflict
+
+        showTypeConstraints :: [(String, TypeClass)] -> String
+        showTypeConstraints [] = ""
+        showTypeConstraints [(s,c)] = (show c)++" "++s
+        showTypeConstraints ((s,c):tc) = (show c)++" "++s++", "++(showTypeConstraints tc)
 
 
 process (Op (Cons e1 e2) l) (global, local, ft) = do
