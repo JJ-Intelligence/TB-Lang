@@ -818,3 +818,42 @@ compareTypes tc (TIterable g) (TStream) = compareTypes tc g TInt
 compareTypes tc (TIterable g) (TList e2) = compareTypes tc g e2
 compareTypes tc (TIterable g) (TParamList) = True
 compareTypes tc e1 e2 = e1 == e2
+
+-- Check if a type is a child of a type class.
+isChildOf :: [(String, TypeClass)] -> Type -> (String, TypeClass) -> Bool
+
+-- Eq class.
+isChildOf tc TInt (s, CEq) = True
+isChildOf tc TBool (s, CEq) = True
+isChildOf tc TEmpty (s, CEq) = True
+isChildOf tc TNone (s, CEq) = True
+isChildOf tc TException (s, CEq) = True
+isChildOf tc (TList e1) (s, CEq) = isChildOf tc e1 (s, CEq)
+isChildOf tc (TGeneric a) (s, CEq)
+    | a == s = False -- a == s, so a can't be a child of s
+    | t == Nothing = False
+    | fromJust t == CEq = True
+    | otherwise = False
+    where t = lookup a tc
+isChildOf _ _ (_, CEq) = False
+
+-- Itr class.
+isChildOf tc (TList _) (s, CItr) = True
+isChildOf tc TStream (s, CItr) = True
+isChildOf tc (TGeneric a) (s, CItr)
+    | a == s = False
+    | t == Nothing = False
+    | fromJust t == CItr = True
+    | otherwise = False
+    where t = lookup a tc
+isChildOf _ _ (s, CItr) = False
+
+-- Ord class.
+isChildOf tc TInt (s, COrd) = True
+isChildOf tc (TGeneric a) (s, COrd)
+    | a == s = False
+    | t == Nothing = False
+    | fromJust t == COrd = True
+    | otherwise = False
+    where t = lookup a tc
+isChildOf tc _ (s, COrd) = False
