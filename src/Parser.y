@@ -125,7 +125,9 @@ E : E ';' E                                 { Seq $1 $3 }
   | C                                       { $1 }
   | L                                       { $1 }
 
-FT : '(' FTP ')' '->' TL                    { FuncType $2 (ExprType $5) Nothing }
+FT : '(' ')' '->' TL                        { FuncType FuncParamEnd (ExprType $4) Nothing }
+   | '(' ')' '->' TL '~' '(' PC ')'         { FuncType FuncParamEnd (ExprType $4) (Just $7) }
+   | '(' FTP ')' '->' TL                    { FuncType $2 (ExprType $5) Nothing }
    | '(' FTP ')' '->' TL '~' '(' PC ')'     { FuncType $2 (ExprType $5) (Just $8) }
 
 FTP : TL ',' FTP                            { FuncParam (ExprType $1) $3 }
