@@ -1,13 +1,17 @@
 { 
+-- The Parser taken in a list of Tokens, and parses them into an abstract syntax tree (AST) of Expressions.
 module Parser where 
+
 import Lexer
 import Expression
+
 }
 
 %name parse
 %tokentype { Token } 
 %error { parseError }
 %token
+
     if        { TokenIf $$ }
     elif      { TokenElif $$ }
     else      { TokenElse _ }
@@ -96,6 +100,7 @@ import Expression
 
 %%
 
+-- Expressions.
 E : E ';' E                                 { Seq $1 $3 }
   | E ';'                                   { $1 }
   | while '(' E ')' '{' E '}'               { While $3 $6 $1 }
@@ -116,7 +121,7 @@ E : E ';' E                                 { Seq $1 $3 }
   | '&' E                                   { AddressExpr $2 $1 }
   | '*' var '=' E %prec POINT               { DefPointerVar (fst $2) $4 }
   | '*' var %prec POINT                     { PointerExpr (Var (fst $2) (snd $2)) }
-  | '*' '(' E ')' %prec POINT               { PointerExpr $3 } -- !!6 reduce/reduce conflicts due to this!!
+  | '*' '(' E ')' %prec POINT               { PointerExpr $3 }
   | '!' E                                   { BooleanNotExpr $2 $1 }
   | try '{' E '}' catch '(' P ')' '{' E '}' { TryCatch $3 $7 $10 $5 }
   | V                                       { $1 }
@@ -125,14 +130,17 @@ E : E ';' E                                 { Seq $1 $3 }
   | C                                       { $1 }
   | L                                       { $1 }
 
+-- Function types.
 FT : '(' ')' '->' TL                        { FuncType FuncParamEnd (ExprType $4) Nothing }
    | '(' ')' '->' TL '~' '(' PC ')'         { FuncType FuncParamEnd (ExprType $4) (Just $7) }
    | '(' FTP ')' '->' TL                    { FuncType $2 (ExprType $5) Nothing }
    | '(' FTP ')' '->' TL '~' '(' PC ')'     { FuncType $2 (ExprType $5) (Just $8) }
 
+-- Function type parameters.
 FTP : TL ',' FTP                            { FuncParam (ExprType $1) $3 }
     | TL                                    { FuncParam (ExprType $1) FuncParamEnd }
 
+-- Function type contents.
 TL : FT                                     { $1 }
    | '[' ']'                                { TList TEmpty }
    | '[' TL ']'                             { TList $2 }
@@ -144,19 +152,23 @@ TL : FT                                     { $1 }
    | cItr TL                                { TIterable $2 }
    | var                                    { TGeneric (fst $1) }
 
+-- Function type constraints parameters.
 PC : TC ',' PC                              { FuncParam $1 $3 }
    | TC                                     { FuncParam $1 FuncParamEnd }
 
+-- Function type constraints.
 TC : cEq var                                { TypeConstraint CEq (fst $2) }
    | cItr var                               { TypeConstraint CItr (fst $2) }
    | cOrd var                               { TypeConstraint COrd (fst $2) }
    | cPrintable var                         { TypeConstraint CPrintable (fst $2) }
 
+-- Variables.
 V : global GV                               { GlobalAssign $2 }
   | GV                                      { LocalAssign $1 }
   | global var                              { GlobalVar (fst $2) (snd $2) }
   | var                                     { Var (fst $1) (snd $1) }
 
+-- Variable definitions/assignments.
 GV : var '+=' E                             { DefVar (fst $1) (Op (MathOp Plus (Var (fst $1) (snd $1)) $3) $2) $2 }
    | var '-=' E                             { DefVar (fst $1) (Op (MathOp Min (Var (fst $1) (snd $1)) $3) $2) $2 }
    | var '*=' E                             { DefVar (fst $1) (Op (MathOp Mult (Var (fst $1) (snd $1)) $3) $2) $2 }
@@ -166,15 +178,16 @@ GV : var '+=' E                             { DefVar (fst $1) (Op (MathOp Plus (
    | var '|=' E                             { DefVar (fst $1) (Op (CompOp Or (Var (fst $1) (snd $1)) $3) $2) $2 }
    | var '=' E                              { DefVar (fst $1) $3 (snd $1) }
 
+-- Parameters.
 P : E ',' P                                 { FuncParam $1 $3 }
   | E                                       { FuncParam $1 FuncParamEnd }
 
--- Elif part of an If statement.
+-- Optional elif/else parts of If statements.
 EElif : elif '(' E ')' '{' E '}' EElif      { Elif $3 $6 (Just $8) $1 }
       | elif '(' E ')' '{' E '}'            { Elif $3 $6 Nothing $1 }
       | else '{' E '}'                      { Else $3 }
 
--- Function block.
+-- Function blocks, and bracketted expressions.
 B : '{' E '}'                               { FuncBlock $2 $1 }
   | '{' '}'                                 { Literal ENone }
   | '(' E ')'                               { $2 }
@@ -201,9 +214,9 @@ C : '[' C2 ']'                              { $2 }
   | '[' E ']'                               { (Op (Cons $2 (Literal Empty)) $1) }
   | '[' ']'                                 { Literal Empty }
 
+-- Lists.
 C2 : E ',' C2                               { Op (Cons $1 $3) $2 }
    | E ',' E                                { Op (Cons $1 (Op (Cons $3 (Literal Empty)) $2)) $2 }
-   -- | E                                      { Op (Cons $1 (Literal Empty)) }
 
 -- Literals.
 L : '-'int %prec NEG                        { Literal (EInt (-$2)) }
@@ -213,10 +226,10 @@ L : '-'int %prec NEG                        { Literal (EInt (-$2)) }
 
 {
 
+-- Parse error thrown if a token cannot be parsed.
 parseError :: [Token] -> a
-parseError [] = error "Parse ERROR: End of Tokens parse error"
-parseError (x:xs) = error ("Parse ERROR: Trying to parse \'" ++ (if last s == ' ' then s else init s) ++ "\', on line " ++ (show l) ++ ", column " ++ (show c))
+parseError [] = error "Parse ERROR: End of file parse error - perhaps you missed a ';' somewhere?"
+parseError (x:xs) = error ("Parse ERROR: Trying to parse \'" ++ (show x) ++ "\', on line " ++ (show l) ++ ", column " ++ (show c))
         where (l,c) = tokenPos x
-              s = show x
 
 }

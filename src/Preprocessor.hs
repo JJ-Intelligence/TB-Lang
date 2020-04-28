@@ -1,43 +1,25 @@
+-- The Evaluator evaluates the types of expression in an AST, throwing any type errors which arise.
 module Preprocessor where
-import Expression
+
 import qualified Data.Map.Strict as Map
-import Data.Maybe
-import qualified Data.Set as Set
-import Debug.Trace
+import qualified Data.Set as Set (fromList, toList)
 import System.IO (hPutStrLn, stderr)
 import System.Exit (exitFailure)
-import Evaluator
+import Data.Maybe (fromJust)
+
+import Expression
+
+import Debug.Trace -- TODO - remove me
 
 type TStore = Map.Map String [Type]
 type TypeConstraints = [(String, TypeClass)]
 type ProcessState = (TStore, TStore, ([Type], TypeConstraints))
 
+-- Insett inbuilt functions/variables into the store.
 insertBuiltIn :: TStore -> TStore
-insertBuiltIn local = foldr (\(s,t) acc -> Map.insert s [t] acc) local ls
-    where
-        ls = [("tail", TFunc [TList $ TGeneric "a"] (TList $ TGeneric "a") []), 
-            ("head", TFunc [TList $ TGeneric "a"] (TGeneric "a") []), 
-            ("drop", TFunc [TInt, TList $ TGeneric "a"] (TList $ TGeneric "a") []),
-            ("take", TFunc [TInt, TList $ TGeneric "a"] (TList $ TGeneric "a") []),
-            ("length", TFunc [TList $ TGeneric "a"] (TInt) []),
-            ("get", TFunc [TInt, TList $ TGeneric "a"] (TGeneric "a") []),
-            ("out", TFunc [TGeneric "a"] (TNone) [("a", CPrintable)]),
-            ("in", TFunc [TInt] (TRef $ TStream) []),
-            ("setIn", TFunc [TList $ TInt] (TNone) []),
-            ("pop", TFunc [TRef $ TIterable $ TGeneric "a"] (TGeneric "a") []),
-            ("popN", TFunc [TInt, TRef $ TIterable $ TGeneric "a"] (TList $ TGeneric "a") []),
-            ("peek", TFunc [TRef $ TIterable $ TGeneric "a"] (TGeneric "a") []),
-            ("peekN", TFunc [TInt, TRef $ TIterable $ TGeneric "a"] (TList $ TGeneric "a") []),
-            ("isEmpty", TFunc [TRef $ TIterable $ TGeneric "a"] (TBool) []),
-            ("hasElems", TFunc [TInt, TRef $ TIterable $ TGeneric "a"] (TBool) []),
-            ("throw", TFunc [TException] (TNone) []),
-            ("EmptyListException", TException),
-            ("IndexOutOfBoundException", TException),
-            ("StreamOutOfInputException", TException),
-            ("InvalidParameterException", TException),
-            ("NonExhaustivePatternException", TException),
-            ("InvalidInputException", TException)]
+insertBuiltIn local = foldr (\(s,t,_) acc -> Map.insert s [t] acc) local getInBuiltVars
 
+-- Starts up the process function by passing in an AST.
 preprocess :: Expr -> IO ()
 preprocess e = do
     (t, (global, local, (ft, _))) <- process e (Map.empty, insertBuiltIn (Map.empty), ([],[]))
@@ -49,6 +31,8 @@ preprocess e = do
 
     return ()
 
+-- Takes in an expression and the current ProcessState.
+-- Returns a list of types which the expression could evaluate to, and an updated ProcessState.
 process :: Expr -> ProcessState -> IO ([Type], ProcessState)
 process (Seq e1 (Return e2 l)) (global, local, (ft,tc)) = do
     (t', (global', local', (ft', tc'))) <- process e1 (global, local, (ft, tc))
@@ -83,8 +67,6 @@ process (BooleanNotExpr e1 l) (global, local, ft) = do
         return ()
 
     return ([TBool], (global', local', ft))
-
-    -- TODO - add to evaluator
 
 process (AddressExpr e1 l) (global, local, ft) = do
     (t, (global', local', _)) <- process e1 (global, local, ft)
@@ -889,3 +871,19 @@ isChildOf tc TInt (s, CPrintable) = True
 isChildOf tc (TList TInt) (s, CPrintable) = True
 isChildOf tc (TList TEmpty) (s, CPrintable) = True
 isChildOf tc _ (s, CPrintable) = False
+
+-- Build a function type.
+evaluateFuncType :: Type -> Type 
+evaluateFuncType (FuncType ps out cs) = buildTFunc ps out cs
+    where
+        buildTFunc ps out cs = TFunc (evaluateParams ps) (evaluateOut out) (if cs == Nothing then [] else evaluateConstraints $ fromJust cs)
+
+        evaluateParams FuncParamEnd = []
+        evaluateParams (FuncParam (ExprType (FuncType ps' out' cs')) e3) = buildTFunc ps' out' cs' : evaluateParams e3
+        evaluateParams (FuncParam (ExprType t) e3) = t : evaluateParams e3
+
+        evaluateOut (ExprType (FuncType ps' out' cs')) = buildTFunc ps' out' cs'
+        evaluateOut (ExprType t) = t
+
+        evaluateConstraints FuncParamEnd = []
+        evaluateConstraints (FuncParam (TypeConstraint cl g) e3) = (g, cl) : evaluateConstraints e3

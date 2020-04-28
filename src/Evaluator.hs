@@ -1,86 +1,33 @@
+-- The Evaluator evaluates an AST, executing instructions in it.
 module Evaluator where
-import Expression
-import Parser
-import Lexer
+
 import qualified Data.Map.Strict as Map
 import qualified Data.IntMap.Lazy as MapL
-import Data.Maybe
-import Data.List
+import Data.Maybe (fromJust)
+import Data.List (sort)
 import System.IO (isEOF)
 import System.IO (hPutStrLn, stderr)
 import System.Exit (exitFailure)
 
-import Debug.Trace
-import qualified Data.Time.Clock.POSIX as Time -- DEBUGGING
-getTime = Time.getPOSIXTime -- DEBUGGING
+import Expression
+import Parser
+import Lexer
+import Preprocessor (evaluateFuncType)
 
--- Reserved elements of the Store.
-builtInFuncStart = 3 -- Starting address for built in functions in the env/store.
-inputStreamsToRead = 2
-storedGlobalEnv = 1 -- Address of the function CallStack.
+import Debug.Trace -- TODO - remove me
+
+-- Reserved elements in the Store.
+builtInFuncStart = 3 -- Starting address for inbuilt functions/variables.
+inputStreamsToRead = 2 -- Address for input streams to read into (set using the setIn([Int]) function).
+storedGlobalEnv = 1 -- Address of the global environment (needed for function calls).
 
 -- Insert reserved items into the Environment and Store.
 insertReserved :: Environment -> Store -> (Environment, Store, Address)
-insertReserved env store = helper ls env (MapL.insert storedGlobalEnv (GlobalEnv Map.empty) store)
-    where ls = [("tail", (VFunc 
-                    (TFunc [TList $ TGeneric "a"] (TList $ TGeneric "a") []) 
-                    [([VVar "xs"], BuiltInFunc "tail" [Var "xs" (0,0)])])),
-                ("head", (VFunc 
-                    (TFunc [TList $ TGeneric "a"] (TGeneric "a") []) 
-                    [([VVar "xs"], BuiltInFunc "head" [Var "xs" (0,0)])])),
-                ("drop", (VFunc 
-                    (TFunc [TInt, TList $ TGeneric "a"] (TList $ TGeneric "a") []) 
-                    [([VVar "n", VVar "xs"], BuiltInFunc "drop" [Var "n" (0,0), Var "xs" (0,0)])])),
-                ("take", (VFunc 
-                    (TFunc [TInt, TList $ TGeneric "a"] (TList $ TGeneric "a") []) 
-                    [([VVar "n", VVar "xs"], BuiltInFunc "take" [Var "n" (0,0), Var "xs" (0,0)])])),
-                ("length", (VFunc 
-                    (TFunc [TList $ TGeneric "a"] (TInt) []) 
-                    [([VVar "xs"], BuiltInFunc "length" [Var "xs" (0,0)])])),
-                ("get", (VFunc 
-                    (TFunc [TInt, TList $ TGeneric "a"] (TGeneric "a") []) 
-                    [([VVar "n", VVar "xs"], BuiltInFunc "get" [Var "n" (0,0), Var "xs" (0,0)])])),
-                ("out", (VFunc 
-                    (TFunc [TGeneric "a"] (TNone) [("a", CPrintable)])
-                    [([VVar "v"], BuiltInFunc "out" [Var "v"(0,0)])])),
-                ("in", (VFunc 
-                    (TFunc [TInt] (TRef $ TStream) []) 
-                    [([VVar "v"], BuiltInFunc "in" [Var "v"(0,0)])])),
-                ("setIn", (VFunc 
-                    (TFunc [TList $ TInt] (TNone) []) 
-                    [([VVar "xs"], BuiltInFunc "setIn" [Var "xs"(0,0)])])),
-                ("pop", (VFunc 
-                    (TFunc [TRef $ TIterable $ TGeneric "a"] (TGeneric "a") []) 
-                    [([VPointer "xs"], BuiltInFunc "pop" [Var "xs"(0,0)])])),
-                ("popN", (VFunc 
-                    (TFunc [TInt, TRef $ TIterable $ TGeneric "a"] (TList $ TGeneric "a") []) 
-                    [([VVar "n", VPointer "xs"], BuiltInFunc "popN" [Var "n"(0,0), Var "xs"(0,0)])])),
-                ("peek", (VFunc 
-                    (TFunc [TRef $ TIterable $ TGeneric "a"] (TGeneric "a") []) 
-                    [([VPointer "xs"], BuiltInFunc "peek" [Var "xs"(0,0)])])),
-                ("peekN", (VFunc 
-                    (TFunc [TInt, TRef $ TIterable $ TGeneric "a"] (TList $ TGeneric "a") []) 
-                    [([VVar "n", VPointer "xs"], BuiltInFunc "peekN" [Var "n"(0,0), Var "xs"(0,0)])])),
-                ("isEmpty", (VFunc 
-                    (TFunc [TRef $ TIterable $ TGeneric "a"] (TBool) []) 
-                    [([VPointer "xs"], BuiltInFunc "isEmpty" [Var "xs"(0,0)])])),
-                ("hasElems", (VFunc
-                    (TFunc [TInt, TRef $ TIterable $ TGeneric "a"] (TBool) [])
-                    [([VVar "n", VPointer "xs"], BuiltInFunc "hasElems" [Var "n"(0,0), Var "xs"(0,0)])])),
-                ("throw", (VFunc
-                    (TFunc [TException] (TNone) [])
-                    [([VVar "e"], BuiltInFunc "throw" [Var "e"(0,0)])])),
-                ("EmptyListException", (VException EmptyListException)),
-                ("IndexOutOfBoundException", (VException IndexOutOfBoundException)),
-                ("StreamOutOfInputException", (VException StreamOutOfInputException)),
-                ("InvalidParameterException", (VException InvalidParameterException)),
-                ("NonExhaustivePatternException", (VException NonExhaustivePatternException)),
-                ("InvalidInputException", (VException InvalidInputException))]
+insertReserved env store = foldr (\(s, _, e) (env', store', a) -> (Map.insert s a env', MapL.insert a e store', a+1)) 
+                                    (env, MapL.insert storedGlobalEnv (GlobalEnv Map.empty) store, builtInFuncStart) getInBuiltVars
 
-          helper xs env store = foldr (\(s,e) (env', store', a) -> (Map.insert s a env', MapL.insert a e store', a+1)) (env, store, builtInFuncStart) xs
-
-
--- Start the evaluator by passing it an Expression (from the Parser).
+-- Takes in a parsed Expression AST.
+-- It created a start state, and then starts the 'step' finite state machine.
 startEvaluator :: Expr -> IO ()
 startEvaluator e = do
     s <- step (e, env, store, heapStart, [], [Done])
@@ -192,6 +139,7 @@ step (Value e1, env, store, nextAddr, callS, FuncBlockFrame:kon) = return (Value
 -- Returning from a function.
 step (Value e1, env, store, nextAddr, callS, ReturnFrame:kon) = return (Value e1, env, store, nextAddr, callS, kon)
 
+-- Try-catch statement.
 step (TryCatch e1 ps e2 _, env, store, nextAddr, callS, kon) = step (e1, env, store, nextAddr, callS, (CatchFrame (evaluateCatchParams ps) e2 env callS):kon)
     where
         evaluateCatchParams :: Parameters -> [ExprValue]
@@ -545,33 +493,36 @@ step s@(_, _, _, _, _, [Done]) = return s
 
 -- No defined step for the current State.
 step s@(exp, env, store, nextAddr, callS, kon) = do
-    printStdErr $ "ERROR in evaluation. This expression could not be evaluated: " ++ (show exp)
+    printStdErr $ "Evaluation ERROR: This expression could not be evaluated \'" ++ (show exp) ++ "\'"
     exitFailure
 
-
--- Pattern matches a function parameters with some given arguments, returning the functions Expr value, as well as updated Env, Store, and next Address.
--- Takes in the unevaluated arguments, the current Env, Store and next Address, as well as the function name.
+-- Takes in a list of evaluated arguments for a function call; the current environment; the current store; 
+-- the current env/store address; the function name.
+-- It pattern-matches a functions parameters with the given arguments, returning the functions value and 
+-- an updated environment, store and next address.
 handleFuncArgs :: [ExprValue] -> Environment -> Store -> Address -> String -> IO (Either Exception (Expr, Environment, Address), Store)
 handleFuncArgs args env store nextAddr s = do
     let fv@(VFunc (TFunc ts _ cs) _) = (lookupVar s env store)
-    (matchFunc, store') <- matchArgsToFunc store args fv
+    (matchFunc, store') <- matchArgsToFunc store args fv -- Match the arguments to the functions' definitions.
 
     case matchFunc of
         (Left ex) -> return (Left ex, store')
         (Right (e1, xs)) -> do
             let (store'') = let (Just (GlobalEnv e)) = MapL.lookup storedGlobalEnv store' in if (e == Map.empty) 
                     then (MapL.update (\x -> Just $ GlobalEnv env) storedGlobalEnv store') 
-                    else (store') -- update Global Env
+                    else (store') -- lookup and update the global environment in the Store.
             let (env', store''', nextAddr') = 
                     foldl (\(accEnv, accStore, addr) (s, e2) -> (overrideEnvStore accEnv accStore addr s e2)) (Map.empty, store'', nextAddr) xs
 
             return (Right (e1, env', nextAddr'), store''')
 
--- Takes in a list of evaluated arguments, and a list of evaluated function parameters.
--- Returns the function Expr value to use, as well as a list of Strings to ExprValues which need to be added to the Env and Store.
+-- Takes in the Store; a list of evaluated arguments; the list of function definitions from the Store.
+-- Returns an updated Store, and either an exception or the function expression to use and a list of variables to expression 
+-- values which need to be put into the Store (bound parameters).
 matchArgsToFunc :: Store -> [ExprValue] -> ExprValue -> IO (Either Exception (Expr, [(String, ExprValue)]), Store)
 matchArgsToFunc store _ (VFunc t []) = return $ (Left NonExhaustivePatternException, store)
 matchArgsToFunc store args (VFunc t ((ps,e1):xs)) = do
+     -- Fold over the parameters and arguments together, trying to pattern-match them.
     (res, store') <- foldr (\(p, a) eith -> do
                                 acc <- eith
                                 case acc of
@@ -585,12 +536,14 @@ matchArgsToFunc store args (VFunc t ((ps,e1):xs)) = do
     case res of
         (Left ex) -> return (Left ex, store')
         (Right ys) -> 
-            if (length args /= length ps  || ys == Nothing) then 
-                matchArgsToFunc store' args (VFunc t xs)
-            else 
-                return $ (Right (e1, fromJust ys), store')
+            case length args /= length ps  || ys == Nothing of
+                True -> matchArgsToFunc store' args (VFunc t xs)
+                False -> return $ (Right (e1, fromJust ys), store')
 
         where
+            -- Pattern match a single parameter to its corresponding argument.
+            -- Takes in the evaluated parameter, evaluated argument, the current list of variable bindings, and the Store.
+            -- Returns the updated Store and either an exception or the updated list of variable bindings.
             matchParamToArg :: ExprValue -> ExprValue -> [(String, ExprValue)] -> Store -> IO (Either Exception (Maybe [(String, ExprValue)]), Store)
             matchParamToArg (VList _ []) (VList _ []) ls store = return $ (Right $ Just ls, store)
             matchParamToArg (VList _ [VList _ []]) (VList _ []) ls store = return (Right $ Just ls, store)
@@ -621,6 +574,7 @@ matchArgsToFunc store args (VFunc t ((ps,e1):xs)) = do
             matchParamToArg (VBool b) (VBool b') ls store = return (Right $ if b == b' then Just ls else Nothing, store)
             matchParamToArg _ _ _ store = return (Right Nothing, store)
 
+            -- Pattern-matches a pointer list parameter (e.g. *(x:y:xs)) to its corresponding argument.
             matchPointerListToRef :: ExprValue -> ExprValue -> ExprValue -> [(String, ExprValue)] -> Store -> Int -> IO (Either Exception (Maybe [(String, ExprValue)]), Store)
             matchPointerListToRef (VPointerList t []) _ _ ls store c = return (Right $ Just ls, store)
             matchPointerListToRef (VPointerList _ [VList _ []]) r (VList _ []) ls store c = return (Right $ Just ls, store)
@@ -684,7 +638,7 @@ matchArgsToFunc store args (VFunc t ((ps,e1):xs)) = do
             matchPointerListToRef _ _ _ _ store _ = return (Right Nothing, store)
 
 
--- Get the type of a value.
+-- Gets the type of a evaluated expression.
 getType :: Store -> ExprValue -> Type
 getType store (VInt _) = TInt
 getType store (VBool _) = TBool
@@ -715,6 +669,7 @@ getType store (VFunc t xs) = t
 getType store (VException e) = TException
 getType _ e = error (show e)
 
+-- Evaluates the type of a parameter list (used for pattern-matching).
 evaluateListType :: Store -> [ExprValue] -> Type -> Type -- Used for checking list types of parameter lists
 evaluateListType store [] t = t
 evaluateListType store ((VInt _):xs) TInt = evaluateListType store xs TInt
@@ -739,38 +694,17 @@ evaluateListType store ((VPointerList t ys):xs) t'
 
 evaluateListType _ (_:xs) _ = TConflict
 
--- Build a function type.
-evaluateFuncType :: Type -> Type 
-evaluateFuncType (FuncType ps out cs) = buildTFunc ps out cs
-    where
-        buildTFunc ps out cs = TFunc (evaluateParams ps) (evaluateOut out) (if cs == Nothing then [] else evaluateConstraints $ fromJust cs)
-
-        evaluateParams FuncParamEnd = []
-        evaluateParams (FuncParam (ExprType (FuncType ps' out' cs')) e3) = buildTFunc ps' out' cs' : evaluateParams e3
-        evaluateParams (FuncParam (ExprType t) e3) = t : evaluateParams e3
-
-        evaluateOut (ExprType (FuncType ps' out' cs')) = buildTFunc ps' out' cs'
-        evaluateOut (ExprType t) = t
-
-        evaluateConstraints FuncParamEnd = []
-        evaluateConstraints (FuncParam (TypeConstraint cl g) e3) = (g, cl) : evaluateConstraints e3
-
-
--- Lookup a variable in the Environment (if not in local env, then search global env) and Store. 
--- Throw an error if it can't be found, else return its corresponding ExprValue.
+-- Lookup a variable in the Environment (if not in local env, then search global env) and Store, returning its value.
 lookupVar :: String -> Environment -> Store -> ExprValue
 lookupVar s env store
-    | localAddr /= Nothing = case MapL.lookup (fromJust localAddr) store of -- local var exists.
-                                    Nothing -> error $ "Value " ++ s ++ " is not in the Store -> " ++ (show store)
-                                    Just (e1) -> e1
-    | globalAddr /= Nothing = case MapL.lookup (fromJust globalAddr) store of -- local var doesn't exist, but global var does.
-                                    Nothing -> error $ "Value " ++ s ++ " is not in the Store -> " ++ (show store)
-                                    Just (e1) -> e1
+    | localAddr /= Nothing = fromJust $ MapL.lookup (fromJust localAddr) store
+    | globalAddr /= Nothing = fromJust $ MapL.lookup (fromJust globalAddr) store
     | otherwise =  error $ "Value " ++ s ++ " is not in the Environment (has not been defined) -> " ++ (show env)
     where localAddr = Map.lookup s env
           globalAddr = Map.lookup s globalEnv
           (GlobalEnv globalEnv) = fromJust $ MapL.lookup storedGlobalEnv store
 
+-- Looks up a pointer variable in the Environment and Store, returning its value.
 lookupPointerVar :: String -> Environment -> Store -> Maybe ExprValue
 lookupPointerVar s env store
     | (isTRef $ getType store val) = MapL.lookup r store
@@ -781,6 +715,7 @@ lookupPointerVar s env store
           isTRef (TRef _) = True
           isTRef _ = False
 
+-- Looks up the address of a variable in the Environment.
 lookupAddr :: String -> Environment -> Address
 lookupAddr s env
     | addr == Nothing = error $ "Value " ++ s ++ " is not in the Environment (has not been defined) -> " ++ (show env)
@@ -943,6 +878,7 @@ readInput xss n = do
 throwException :: String -> Pos -> Expr
 throwException s l = FuncCall "throw" (FuncParam (Var s (0,0)) FuncParamEnd) l
 
+-- Shows an exception and its call stack, to then be printed out.
 showException :: ExprValue -> CallStack -> String
 showException ex exCallS = (show ex) ++ " in evaluation:" ++ showCS exCallS
     where
@@ -951,6 +887,6 @@ showException ex exCallS = (show ex) ++ " in evaluation:" ++ showCS exCallS
             (FuncCall s ps l) -> "function call " ++ (show c) ++ (printPos l) ++ (showCS cs) 
             _ -> (show c) ++ (showCS cs)
 
+-- Gets the posiiton of the top elemnt of a function call stack.
 getFuncCallPos :: CallStack -> Pos
-getFuncCallPos [] = (0,0)
 getFuncCallPos ((FuncCall _ _ l):_) = l

@@ -1,13 +1,17 @@
 { 
-module Lexer where 
+-- The Lexer takes in a files contents and translates it to a list of tokens.
+module Lexer where
+
 import Expression
+
 }
 
-%wrapper "posn" 
+%wrapper "posn" -- Using the 'posn' wrapper to get position data for tokens.
 $digit = 0-9     
 $alpha = [a-zA-Z]    
 
 tokens :-
+
     $white+                             ;
     "--".*                              ;
     "/*".*"*/"                          ;
@@ -85,7 +89,7 @@ tokens :-
 
 {
 
--- Lexeme Tokens.
+-- Tokens which file contents are translated into.
 data Token =  TokenIf                           { pos :: Pos }
             | TokenElif                         { pos :: Pos }
             | TokenElse                         { pos :: Pos }
@@ -162,47 +166,47 @@ data Token =  TokenIf                           { pos :: Pos }
 
 -- Token instance of Show, used for error messages.
 instance Show Token where
-    show (TokenIf _) = "if "
-    show (TokenElif _) = "elif "
-    show (TokenElse _) = "else "
+    show (TokenIf _) = "if"
+    show (TokenElif _) = "elif"
+    show (TokenElse _) = "else"
 
-    show (TokenWhile _) = "while "
+    show (TokenWhile _) = "while"
 
-    show (TokenReturnTypeArrow _) = "-> "
-    show (TokenFuncType _) = "type "
-    show (TokenFuncDef _) = "func "
-    show (TokenReturn _) = "return "
+    show (TokenReturnTypeArrow _) = "->"
+    show (TokenFuncType _) = "type"
+    show (TokenFuncDef _) = "func"
+    show (TokenReturn _) = "return"
 
-    show (TokenTry _) = "try "
-    show (TokenCatch _) = "catch "
+    show (TokenTry _) = "try"
+    show (TokenCatch _) = "catch"
 
-    show (TokenSeq _) = "; "
-    show (TokenOpenParen _) = "( "
-    show (TokenCloseParen _) = ") "
-    show (TokenOpenCurly _) = "{ "
-    show (TokenCloseCurly _) = "} "
-    show (TokenOpenSquare _) = "[ "
-    show (TokenCloseSquare _) = "] "
-    show (TokenComma _) = ", "
+    show (TokenSeq _) = ";"
+    show (TokenOpenParen _) = "("
+    show (TokenCloseParen _) = ")"
+    show (TokenOpenCurly _) = "{"
+    show (TokenCloseCurly _) = "}"
+    show (TokenOpenSquare _) = "["
+    show (TokenCloseSquare _) = "]"
+    show (TokenComma _) = ","
 
-    show (TokenPlus _) = "+ "
-    show (TokenMinus _) = "- "
-    show (TokenDivide _) = "/ "
-    show (TokenExponent _) = "^ "
-    show (TokenModulus _) = "% "
-    show (TokenEquals _) = "= "
-    show (TokenDoubleEquals _) = "== "
-    show (TokenGreaterThanEquals _) = ">= "
-    show (TokenLessThanEquals _) = "<= "
-    show (TokenNotEquals _) = "!= "
-    show (TokenAnd _) = "&& "
-    show (TokenOr _) = "|| "
-    show (TokenLessThan _) = "< "
-    show (TokenGreaterThan _) = "> "
-    show (TokenCons _) = ": "
+    show (TokenPlus _) = "+"
+    show (TokenMinus _) = "-"
+    show (TokenDivide _) = "/"
+    show (TokenExponent _) = "^"
+    show (TokenModulus _) = "%"
+    show (TokenEquals _) = "="
+    show (TokenDoubleEquals _) = "=="
+    show (TokenGreaterThanEquals _) = ">="
+    show (TokenLessThanEquals _) = "<="
+    show (TokenNotEquals _) = "!="
+    show (TokenAnd _) = "&&"
+    show (TokenOr _) = "||"
+    show (TokenLessThan _) = "<"
+    show (TokenGreaterThan _) = ">"
+    show (TokenCons _) = ":"
     show (TokenNot _) = "!"
 
-    show (TokenStar _) = "* "
+    show (TokenStar _) = "*"
     show (TokenAddress _) = "&"
 
     show (TokenTypeInt _) = "Int"
@@ -210,22 +214,24 @@ instance Show Token where
     show (TokenTypeNone _) = "NoneType"
     show (TokenTypeStream _) = "Stream"
 
-    show (TokenTypeConstraintEq _) = "Eq "
-    show (TokenTypeConstraintItr _) = "Itr "
-    show (TokenTypeConstraintOrd _) = "Ord "
-    show (TokenTypeConstraintTwiddle _) = "~ "
+    show (TokenTypeConstraintEq _) = "Eq"
+    show (TokenTypeConstraintItr _) = "Itr"
+    show (TokenTypeConstraintOrd _) = "Ord"
+    show (TokenTypeConstraintTwiddle _) = "~"
 
-    show (TokenInt n _) = (show n) ++ " "
-    show (TokenBool b _) = (show b) ++ " "
-    show (TokenNone _) = "None "
+    show (TokenInt n _) = (show n)
+    show (TokenBool b _) = (show b)
+    show (TokenNone _) = "None"
 
-    show (TokenGlobal _) = "global "
-    show (TokenVar (s, _)) = s ++ " "
+    show (TokenGlobal _) = "global"
+    show (TokenVar (s, _)) = s
 
+-- Gets the row and column numbers of a token.
 tokenPos :: Token -> (Int, Int)
 tokenPos (TokenVar (_, p)) = p
 tokenPos tok = pos tok
 
+-- Converts an AlexPosn to a Pos (a tuple of row and column numbers)
 toPos :: AlexPosn -> Pos
 toPos (AlexPn _ l c) = (l,c)
 
