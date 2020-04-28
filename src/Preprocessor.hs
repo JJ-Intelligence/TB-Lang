@@ -348,10 +348,7 @@ process (FuncCall s ps l) (global, local, (ft, cs)) = do
                     let xs = foldr (\(t,n) acc -> if isGenericInFuncParam g' t then (t,n):acc else acc) [] (zip ps' [0..]) -- xs = [(Type, Int)] (function parameter types)
 
                     case length xs < 1 of
-                        True -> do
-                            printStdErr ("Type WARNNG: In function call \'"++(show $ FuncCall s ps l)++"\'" ++ (printPos l)
-                                ++ "\nThe functions return type is a generic which is not in the function calls parameters, so cannot be inferred")
-                            return ([out], (global', local', (ft, cs)))
+                        True -> return ([out], (global', local', (ft, cs)))
 
                         False -> do
                             ys <- foldr (\e acc -> do
