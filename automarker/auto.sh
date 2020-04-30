@@ -26,13 +26,14 @@ do
 		in+=$j
 		in+=".txt"
 		out="pr$i/outputs/out$j.txt"
+		err="pr$i/outputs/err$j.txt"
 
 		echo "  Input:"
 		echo "  ------"
 		cat $in | sed "s/^/  /"
 		echo
 		
-		$executable $prog < $in > $out 2>/dev/null
+		$executable $prog < $in > $out 2> $err
 
 		if [ "$?" = 124 ]; then
 			echo -e "  TEST FAILED -- TIMEOUT"

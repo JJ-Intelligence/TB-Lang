@@ -1,10 +1,14 @@
--- Challenge 1, solution 1
+-- Challenge 2
 
+-- Only accept streams a b c
 setIn([0,1,2]);
 
+-- While there's enough input
 while (!isEmpty(in(0)) && !isEmpty(in(1)) && !isEmpty(in(2))) {
+    -- Bind values from streams a b c to variables
     a = pop(in(0));
     b = pop(in(1));
     c = pop(in(2));
+
     out([c, b, a, a+b, b+c]);
 };

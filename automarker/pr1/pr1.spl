@@ -1,12 +1,15 @@
--- Challenge 1, solution 1
+-- Challenge 1
 
+-- Only accept streams a and b (index 0 and 1)
 setIn([0,1]);
 
-while (hasElems(2, in(0))) {
-    out(popN(2, in(0)));
-    out(pop(in(1)));
+-- While there's enough input
+while (hasElems(2, in(0)) && !isEmpty(in(1))) {
+    out(popN(2, in(0)));    -- Print 2 values from a
+    out(pop(in(1)));        -- Print 1 value from b
 };
 
-if (isEmpty(in(0)) == False) {
+-- If there's one more left in stream a, then print it out
+if (!isEmpty(in(0))) {
     out(pop(in(0)));
 };
