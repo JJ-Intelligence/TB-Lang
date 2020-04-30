@@ -24,12 +24,12 @@ main = do args <- getArgs
                     True -> do
                         f <- readFile solution
                         let xs = parse $ alexScanTokens f
-                        print "Parsed: " -- TODO - remove me
-                        print xs -- TODO - remove me
-                        putStr "\n" -- TODO - remove me
-                        print "Preprocessing: " -- TODO - remove me
-                        preprocess xs 
-                        print "Evaluating: " -- TODO - remove me
+--                        print "Parsed: " -- TODO - remove me{-
+--                        print xs -- TODO - remove me
+--                        putStr "\n" -- TODO - remove me
+--                        print "Preprocessing: " -- TODO - remove me
+                        preprocess xs
+--                        print "Evaluating: " -- TODO - remove me-}
                         startEvaluator xs
             _ -> do
                 printStdErr ("Input ERROR: multiple files inputted, the interpreted can only read one file")
