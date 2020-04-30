@@ -2,8 +2,8 @@ type map ([a], (a) -> b) -> [b];
 func map ([], f) = [];
 func map (x:xs, f) = f(x) : map (xs, f);
 
-type square (Int) -> Bool;
-func square (n) = n == 2;
+type square (Int) -> Int;
+func square (n) = n ^ 2;
 
 out(map ([1,2,3,4], square));
 

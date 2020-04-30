@@ -2,9 +2,9 @@ module GenerateInput where
 
 main :: IO ()
 main = do
-    let start = 50
+    let start = -1000
     let colLen = 80
-    let numStreams = 5
+    let numStreams = 3
     writeFile "input.txt" $ genString start numStreams colLen 
 
 genString :: Int -> Int -> Int -> String
