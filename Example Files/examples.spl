@@ -22,3 +22,4 @@ type isEven (Int) -> Bool;
 func isEven (n) = n % 2 == 0;
 
 out(filter(isEven, [1,2,3,4]));
+

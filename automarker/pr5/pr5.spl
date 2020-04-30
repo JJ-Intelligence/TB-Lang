@@ -1,0 +1,9 @@
+-- Challenge 5
+
+setIn([0]);
+
+acc = 0;
+while (!isEmpty(in(0))) {
+    acc += pop(in(0));
+    out(acc);
+};

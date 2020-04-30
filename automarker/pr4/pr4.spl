@@ -1,0 +1,7 @@
+-- Challenge 4
+
+setIn([0]);
+
+while (hasElems(3, in(0))) {
+    out([pop(in(0)), 2*pop(in(0)), 3*pop(in(0))-1]);
+};
