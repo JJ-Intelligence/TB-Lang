@@ -3,10 +3,12 @@
 -- Only accept streams a and b (index 0 and 1)
 setIn([0,1]);
 
+type solve (*Stream, *Stream) -> [Int];
+func solve (*(a1:a2:as), *(b:bs)) = [a1, a2, b];
+
 -- While there's enough input
 while (hasElems(2, in(0)) && !isEmpty(in(1))) {
-    out(popN(2, in(0)));    -- Print 2 values from a
-    out(pop(in(1)));        -- Print 1 value from b
+    out(solve(in(0), in(1)));
 };
 
 -- If there's one more left in stream a, then print it out

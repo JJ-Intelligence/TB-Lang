@@ -2,6 +2,9 @@
 
 setIn([0]);
 
+type solve (*(Itr Int)) -> [Int];
+func solve (*(a:b:c:ls)) = [c, 2*b, 3*a-1];
+
 while (hasElems(3, in(0))) {
-    out([pop(in(0)), 2*pop(in(0)), 3*pop(in(0))-1]);
+    out(solve(in(0)));
 };

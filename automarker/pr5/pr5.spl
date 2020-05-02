@@ -1,5 +1,4 @@
 -- Challenge 5
-
 setIn([0]);
 
 acc = 0;

@@ -3,8 +3,8 @@ module GenerateInput where
 main :: IO ()
 main = do
     let start = -1000
-    let colLen = 80
-    let numStreams = 3
+    let colLen = 500000
+    let numStreams = 1
     writeFile "input.txt" $ genString start numStreams colLen 
 
 genString :: Int -> Int -> Int -> String

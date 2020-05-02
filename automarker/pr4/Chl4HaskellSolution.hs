@@ -9,3 +9,4 @@ main = do
 solve :: [Int] -> [Int]
 solve [] = []
 solve (a1:a2:a3:as) = a3 : (2*a2) : (3*a1-1) : solve as
+solve _ = []
