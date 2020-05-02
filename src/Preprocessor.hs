@@ -745,19 +745,24 @@ putFuncParamsInStore tc (t:ts) (FuncParam e1 e2) local es
 
                 isItrOrList (TIterable a) = a
                 isItrOrList (TList a) = a
+                isItrOrList TStream = TInt
                 isItrOrList _ = TConflict
 
         matchToType tc (TRef rt) (PointerExpr e1) ls
             | ls' == Nothing = Nothing
-            | otherwise = Just $ foldr (\(s,t) acc -> (s,TRef t):acc) ls (fromJust ls')
-            where ls' = matchToType tc rt e1 []
+            | length ls'' > 1 = Just $ (tail ls'') ++ [(fst $ last ls'', TRef $ snd $ last ls'')] ++ ls
+            | otherwise = Just $ foldr (\(s,t) acc -> (s,TRef t):acc) ls (ls'')
+            where 
+                ls' = matchToType tc rt e1 []
+                ls'' = fromJust ls'
 
         matchToType tc t (Var s _) ls = Just $ (s, t):ls
 
         matchToType tc t e ls
             | t' == Nothing || not (compareTypes tc t (fromJust t')) = Nothing
             | otherwise = Just ls
-            where t' = getLitType e
+            where 
+                t' = getLitType e
 
         getLitType :: Expr -> Maybe Type
         getLitType (Literal (EInt _)) = Just TInt

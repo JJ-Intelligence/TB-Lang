@@ -133,18 +133,21 @@ E : E ';' E                                 { Seq $1 $3 }
 -- Function types.
 FT : '(' ')' '->' TL                        { FuncType FuncParamEnd (ExprType $4) Nothing }
    | '(' ')' '->' TL '~' '(' PC ')'         { FuncType FuncParamEnd (ExprType $4) (Just $7) }
+   | '(' TL ')' '->' TL                     { FuncType (FuncParam (ExprType $2) FuncParamEnd) (ExprType $5) Nothing }
+   | '(' TL ')' '->' TL '~' '(' PC ')'      { FuncType (FuncParam (ExprType $2) FuncParamEnd) (ExprType $5) (Just $8) }
    | '(' FTP ')' '->' TL                    { FuncType $2 (ExprType $5) Nothing }
    | '(' FTP ')' '->' TL '~' '(' PC ')'     { FuncType $2 (ExprType $5) (Just $8) }
 
 -- Function type parameters.
 FTP : TL ',' FTP                            { FuncParam (ExprType $1) $3 }
-    | TL                                    { FuncParam (ExprType $1) FuncParamEnd }
+    | TL ',' TL                             { FuncParam (ExprType $1) (FuncParam (ExprType $3) FuncParamEnd) }
 
 -- Function type contents.
-TL : FT                                     { $1 }
+TL : '(' TL ')'                             { $2 }
+   | FT                                     { $1 }
    | '[' ']'                                { TList TEmpty }
    | '[' TL ']'                             { TList $2 }
-   | '*'TL                                  { TRef $2 }
+   | '*'TL %prec POINT                      { TRef $2 }
    | tInt                                   { TInt }
    | tBool                                  { TBool }
    | tNone                                  { TNone }
