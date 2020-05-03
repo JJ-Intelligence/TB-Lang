@@ -4,3 +4,6 @@
 Lexer.hs
 Parser.hs
 Main.exe
+out*.txt
+err*.txt
+/automarker/myinterpreter.exe
