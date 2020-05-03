@@ -9,13 +9,11 @@ import Data.Maybe (fromJust)
 
 import Expression
 
-import Debug.Trace -- TODO - remove me
-
 type TStore = Map.Map String [Type]
 type TypeConstraints = [(String, TypeClass)]
 type ProcessState = (TStore, TStore, ([Type], TypeConstraints))
 
--- Insett inbuilt functions/variables into the store.
+-- Insert inbuilt functions/variables into the store.
 insertBuiltIn :: TStore -> TStore
 insertBuiltIn local = foldr (\(s,t,_) acc -> Map.insert s [t] acc) local getInBuiltVars
 

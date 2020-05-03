@@ -14,8 +14,6 @@ import Parser
 import Lexer
 import Preprocessor (evaluateFuncType)
 
-import Debug.Trace -- TODO - remove me
-
 -- Reserved elements in the Store.
 builtInFuncStart = 3 -- Starting address for inbuilt functions/variables.
 inputStreamsToRead = 2 -- Address for input streams to read into (set using the setIn([Int]) function).

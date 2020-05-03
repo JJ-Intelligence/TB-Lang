@@ -1,7 +1,9 @@
 -- Challenge 5
-setIn([0]);
 
+-- Create an accumulator variable.
 acc = 0;
+
+-- While stream 'a' has input, pop an Int and add it to 'acc', then print out 'acc'.
 while (!isEmpty(in(0))) {
     acc += pop(in(0));
     out(acc);

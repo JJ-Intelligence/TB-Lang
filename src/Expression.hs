@@ -6,7 +6,6 @@ import qualified Data.IntMap.Lazy as MapL
 import System.IO (hPutStrLn, stderr)
 import Data.Maybe (fromJust)
 
-
 -- ** CESK data types **
 
 type State = (Expr, Environment, Store, Address, CallStack, Kon) -- The current state/configuration of the modfiied CESK machine.
