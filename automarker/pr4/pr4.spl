@@ -8,3 +8,4 @@ func solve (*(a:b:c:ls)) = [c, 2*b, 3*a-1];
 while (hasElems(3, in(0))) {
     out(solve(in(0)));
 };
+
