@@ -1,0 +1,16 @@
+-- Challenge 10
+
+for ({ i = 1; fib = [1] }; hasElems(i, in(0)); i++) {
+    xs = peekN(i, in(0));
+
+    for ({ i = 0; sum = 0}; i < length(xs); i++) {
+        sum += get(i, fib) * get(i,xs);
+    };
+    out(sum);
+
+    if (length(fib) > 1) {
+        fib = (get(0,fib) + get(1,fib)) : fib;
+    } else {
+        fib = 1:fib;
+    };
+};

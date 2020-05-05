@@ -1,0 +1,8 @@
+-- Challenge 9
+
+try {
+    for (i = 1; True; i++) {
+        a = pop(in(0));
+        out([a,i]);
+    };
+} catch (StreamOutOfInputException) { 0 };

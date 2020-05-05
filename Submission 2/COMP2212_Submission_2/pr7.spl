@@ -1,0 +1,13 @@
+-- Challenge 7
+
+type skip (Int, *Stream) -> Bool;
+func skip (n, *as) = {
+    if (hasElems(n+1, in(0))) {
+        popN(n, in(0));
+        out(pop(in(0)));
+        return (True);
+    };
+    return (False);
+};
+
+while (skip(2, in(0)) && skip(3, in(0))) { 0 };
