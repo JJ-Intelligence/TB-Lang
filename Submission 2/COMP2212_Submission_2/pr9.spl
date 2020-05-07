@@ -1,6 +1,7 @@
 -- Challenge 9
 
 try {
+    -- Keep looping until stream out of input, each time incrementing i
     for (i = 1; True; i++) {
         a = pop(in(0));
         out([a,i]);

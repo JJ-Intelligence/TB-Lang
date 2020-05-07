@@ -1,16 +1,14 @@
 -- Challenge 6
 
+type echo (*Stream) -> NoneType;
+func echo (*(a:as)) = out(a);
+
 try {
     while (True) {
-        a1 = pop(in(0));
-        out(a1);
-        a2 = pop(in(0));
-        out(a2);
-        b1 = pop(in(1));
-        out(b1);
-        b2 = pop(in(1));
-        out(b2);
-        b3 = pop(in(1));
-        out(b3);
+        echo(in(0));
+        echo(in(0));
+        echo(in(1));
+        echo(in(1));
+        echo(in(1));
     };
-} catch (StreamOutOfInputException) { 0 };
+} catch (NonExhaustivePatternException) { 0 };

@@ -1,5 +1,6 @@
 -- Challenge 7
 
+-- Skip over n elements in stream and output the n+1th element
 type skip (Int, *Stream) -> Bool;
 func skip (n, *as) = {
     if (hasElems(n+1, in(0))) {
@@ -10,4 +11,5 @@ func skip (n, *as) = {
     return (False);
 };
 
+-- Keep running until skip runs out of input in either stream
 while (skip(2, in(0)) && skip(3, in(0))) { 0 };
