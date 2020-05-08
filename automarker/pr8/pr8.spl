@@ -1,23 +1,5 @@
 -- Challenge 8
 
--- Solution 1
-type check (*Stream, *Stream) -> Int;
-func check (*(a:as), *(b:bs)) = {
-    out([a,b]);
-    return (a-b);
-};
-
-try {
-    while (True) {
-        for ({ i = 0; sum = 0 }; i < 5; i++) {
-            sum += check(in(0), in(1));
-        };
-        out(sum);
-    };
-} catch (NonExhaustivePatternException) { 0 };
-
-
--- Solution 2
 try {
     while (True) {
         for ({ i = 0; sum = 0 }; i < 5; i++) {
