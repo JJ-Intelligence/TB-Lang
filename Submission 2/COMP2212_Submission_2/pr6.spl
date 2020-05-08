@@ -1,7 +1,9 @@
 -- Challenge 6
 
-type echo (*Stream) -> NoneType;
+-- This pops and prints out a value from a stream, if empty it throws StreamOutOfInputException
+type echo (*Itr Int) -> NoneType;
 func echo (*(a:as)) = out(a);
+func echo (*([])) = throw (StreamOutOfInputException);
 
 try {
     while (True) {
@@ -11,4 +13,4 @@ try {
         echo(in(1));
         echo(in(1));
     };
-} catch (NonExhaustivePatternException) { 0 };
+} catch (StreamOutOfInputException) { 0 };
