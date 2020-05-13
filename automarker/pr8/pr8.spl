@@ -1,6 +1,7 @@
 -- Challenge 8
 
 try {
+    -- Keeps looping until the streams run out of values
     while (True) {
         for ({ i = 0; sum = 0 }; i < 5; i++) {
             a = pop(in(0));
