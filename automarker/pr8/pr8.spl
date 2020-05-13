@@ -7,7 +7,7 @@ try {
             a = pop(in(0));
             b = pop(in(1));
             sum += (a - b);
-            out([a, b])
+            out([a, b]);
         };
         out(sum);
     };
