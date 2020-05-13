@@ -1,24 +1,20 @@
 
--- type f (Int) -> Int;
--- func f (1) = {
---     x = f(2);
---     return (x);
--- };
--- func f (2) = {
---     drop(3, []);
---     return (2);
--- };
 
 
--- try {
---     f(3);
--- } catch (NonExhaustivePatternException) {
---     out(1);
--- };
 
--- f(1);
 
--- out(!1 != 1);
 
--- out([[1]]);
-out(1)
+-- Gets the index of an item in a list.
+type find ([a], a) -> Int ~ (Eq a);
+func find (xs, y) = {
+    for (i = 0; i < length (xs); i++) {
+        if (get(i, xs) == y) {
+            return(i);
+        };
+    };
+    return(-1);
+};
+
+out(find([1,2,3,4], 4));
+
+
