@@ -1,7 +1,0 @@
--- Challenge 3, solution 1
-func solve ([], []) = return ([]);
-func solve (a:as, y:b:bs) = return (b : a : solve (as, bs));
-
-as:bs:[] = input;
-
-out (0 : solve (as, bs));
