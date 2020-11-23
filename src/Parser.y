@@ -1,5 +1,5 @@
 { 
--- The Parser taken in a list of Tokens, and parses them into an abstract syntax tree (AST) of Expressions.
+-- The Parser takes in a list of Tokens, and parses them into an abstract syntax tree (AST) of Expressions.
 module Parser where 
 
 import Lexer
