@@ -1,7 +1,7 @@
 {
     "name": "tb-lang",
     "displayName": "TB Lang",
-    "description": "Syntax highlighting for TB language (comp2212 coursework jp6g18 and jljh1g18)",
+    "description": "Syntax highlighting for TB-Lang",
     "version": "0.0.1",
     "engines": {
         "vscode": "^1.43.0"
