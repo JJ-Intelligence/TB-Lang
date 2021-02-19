@@ -7,6 +7,121 @@ In this repository:
 * `/TB-Lang Examples` contains example inputs and TB-Lang programs.
 * `/tb-lang` is a Visual Studio Code syntax/language extension for TB-Lang.
 
+## Example Usage
+
+Functions can be given generic or fixed types, which are checked at preprocessing time.
+```Haskell
+-- Map a function over a list
+type map ([a], (a) -> b) -> [b];
+func map ([], f) = [];
+func map (x:xs, f) = f(x) : map(xs, f);
+
+-- Square an Int
+type square (Int) -> Int;
+func square (n) = n^2;
+
+-- Check if an Int is even
+type isEven (Int) -> Bool;
+func isEven (n) = n % 2 == 0;
+
+
+nums = map([2, 3, 4, 5], square);
+out(head(nums))
+
+even_nums = map(nums, isEven)
+if (head(even_nums)) {
+  out(1);
+};
+
+-- Outputs: 4 1
+```
+
+
+Functions can be defined as a one-liner, or as a function block.
+```Haskell
+type filter ((a) -> Bool, [a]) -> [a];
+func filter (f, []) = [];
+func filter (f, (x:xs)) = {
+  if (f(x)) {
+    return (x : filter(f, xs));
+  };
+  
+  return (filter(f, xs));
+}
+```
+
+
+The class constraints in the below function ensure that the values passed to the list and the value can both be equality tested.
+```Haskell
+-- Get the index of an item in a list
+type find ([a], a) -> Int ~ (Eq a);
+func find (xs, y) = {
+  for (i = 0; i < length (xs); i++) {
+    if (get(i, xs) == y) {
+      return(i);
+    };
+  };
+  
+  return (-1);
+};
+
+num = find([1, 2, 3, 4], 4)
+out(num)
+
+-- Outputs: 3
+```
+
+
+Pointers can be used with the `&` operator on an expression. Here the addressed expression `(1 == 2 || 3 == 3)` is stored, and then `y` is declared to point to the expression's address. The `*` operator is then used to get the value at `y`'s address.
+```Haskell
+y = &(1 == 2 || 3 == 3);
+out(*y);
+
+-- Outputs: True
+```
+
+
+Variables can be passed to functions in a pass-by-reference style.
+```Haskell
+xs = [1, 2, 3];
+
+type echo (*[Int]) -> NoneType;
+func echo (*(a:as)) = out(a);
+func echo (*([])) = throw (StreamOutOfInputException);
+
+echo (&xs);
+echo (&xs)
+
+-- Outputs: 1 2
+```
+
+
+Ambiguous type errors are thrown by the preprocessor if there is a type error.
+```Haskell
+x = 5;
+
+if (x % 2 == 0) {
+  x = 0;
+} else {
+  x = False;
+}
+
+out(x + 5);
+
+-- Outputs: Type ERROR: in operation 'x + 5' on line 9, column 7. Expression e1 'x' has embiguous types: Int, Boolean. But expressions should have type Int or List.
+```
+
+
+Try-catch statements can be used to catch and handle exceptions.
+```Haskell
+try {
+  for (a = pop(in(0)); True; a = pop(in(0))) {
+    out(a);
+  };
+} catch (StreamOutOfInputException, InvalidInputException) {
+  out(0);
+}
+```
 
 ## Language Features
 ### Syntax
@@ -51,7 +166,7 @@ When errors occur during runtime, exceptions are thrown - for example ‘head([]
 
 We have provided the following exceptions in our language: EmptyListException, IndexOutOfBoundException, StreamOutOfInputException, InvalidParameterException, NonExhaustivePatternException, InvalidInputException. These exceptions are thrown at intuitive times e.g.  InvalidInputException is thrown when reading in a line which doesn’t consist of integers (e.g. it contains a letter).
 
-Type System and Static Type Checking
+### Type System and Static Type Checking
 Our preprocessor checks the type safety of expressions and variables, also ensuring that variables are not accessed before they have been defined. This provides the programmer with confidence that if the program runs, there will not be any type errors or “variable not defined” access errors at runtime. When the preprocessor finds a type conflict, it prints out a helpful error message to stderr, and stops the program - shown in Figure 11. 
 
 Due to our variables being dynamic and if statements being unscoped, situations may arise where a variables’ type is ambiguous (e.g. a variable could exit an if statement being of type Int, or being of type Bool, depending on the conditions). To prevent operation/function type errors, in the preprocessor variable types are maintained as a list, and when an operation or function needs to constrain the type of the variable, then we check if the list is a singleton and throw a type error if not - shown in Figure 12.
@@ -94,7 +209,3 @@ The step function takes the parsed program, along with an Environment and Store 
 We use the Environment and Store to hold variables, making variable lookup a two-stage process. This means that if a variable isn’t in the Environment, then it can’t be accessed; thus allowing us to maintain scope by storing an older Environment on the Kontinuation, and putting it back into the state once we have left that scope. The Store is passed between all states. This allows for global variable modification, and for different named variables to access the same Store value (this is used for pass-by-reference in functions). We avoid the need for garbage collection by storing the next available address in a similar fashion, meaning that out-of-scope variables in the store will later be overwritten as new variables are introduced.
 
 The IO monad is used by the step function so that I/O can be performed during the evaluation of the program. 
-
-## Usage Screenshots
-
-
